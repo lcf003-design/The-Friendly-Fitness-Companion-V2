@@ -59,3 +59,14 @@ struct MainTabView: View {
         }
     }
 }
+
+#Preview {
+    MainTabView()
+        .modelContainer(for: [
+            Exercise.self,
+            WorkoutSession.self,
+            WorkoutExercise.self,
+            ExerciseSet.self,
+            UserSettings.self
+        ], inMemory: true)
+}
