@@ -61,12 +61,16 @@ struct MainTabView: View {
 }
 
 #Preview {
-    MainTabView()
-        .modelContainer(for: [
-            Exercise.self,
-            WorkoutSession.self,
-            WorkoutExercise.self,
-            ExerciseSet.self,
-            UserSettings.self
-        ], inMemory: true)
+    let schema = Schema([
+        Exercise.self,
+        WorkoutSession.self,
+        WorkoutExercise.self,
+        ExerciseSet.self,
+        UserSettings.self
+    ])
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: schema, configurations: [config])
+    
+    return MainTabView()
+        .modelContainer(container)
 }
