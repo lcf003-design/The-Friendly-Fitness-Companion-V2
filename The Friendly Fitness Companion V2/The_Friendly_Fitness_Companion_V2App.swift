@@ -12,7 +12,11 @@ import SwiftData
 struct The_Friendly_Fitness_Companion_V2App: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Exercise.self,
+            WorkoutSession.self,
+            WorkoutExercise.self,
+            ExerciseSet.self,
+            UserSettings.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,7 +29,7 @@ struct The_Friendly_Fitness_Companion_V2App: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
         }
         .modelContainer(sharedModelContainer)
     }
