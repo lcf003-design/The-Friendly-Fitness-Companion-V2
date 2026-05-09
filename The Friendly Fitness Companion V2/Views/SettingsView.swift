@@ -1,0 +1,178 @@
+import SwiftUI
+import SwiftData
+
+struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    
+    @Bindable var settings: UserSettings
+    
+    let tempoOptions = [
+        "Mentzer HIT (4-2-4)",
+        "Standard Hypertrophy (3-1-3)",
+        "Explosive Power (2-0-1)",
+        "Isometrics (1-4-1)"
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.midnightMatte.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        
+                        // Section: Grind Engine
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("THE GRIND ENGINE")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .tracking(2)
+                                .padding(.horizontal)
+                            
+                            VStack(spacing: 0) {
+                                // Rest Timer Toggle
+                                Toggle("Automated Rest Timer", isOn: $settings.isRestTimerEnabled)
+                                    .font(.headline)
+                                    .foregroundColor(Theme.textPrimary)
+                                    .padding()
+                                    .background(Theme.surface)
+                                    .tint(Theme.warningOrange)
+                                
+                                Divider().background(Theme.border.opacity(0.3))
+                                
+                                // Haptic Metronome Toggle
+                                Toggle("Haptic Metronome", isOn: $settings.isHapticMetronomeEnabled)
+                                    .font(.headline)
+                                    .foregroundColor(Theme.textPrimary)
+                                    .padding()
+                                    .background(Theme.surface)
+                                    .tint(Theme.accent)
+                                
+                                if settings.isHapticMetronomeEnabled {
+                                    Divider().background(Theme.border.opacity(0.3))
+                                    
+                                    // Tempo Picker
+                                    HStack {
+                                        Text("Tempo Profile")
+                                            .font(.subheadline)
+                                            .foregroundColor(Theme.textSecondary)
+                                        Spacer()
+                                        Picker("Tempo Profile", selection: $settings.tempoProfile) {
+                                            ForEach(tempoOptions, id: \.self) { tempo in
+                                                Text(tempo).tag(tempo)
+                                            }
+                                        }
+                                        .tint(Theme.accent)
+                                    }
+                                    .padding()
+                                    .background(Theme.surface)
+                                }
+                            }
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                        }
+                        
+                        // Section: Ecosystem
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("ECOSYSTEM")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .tracking(2)
+                                .padding(.horizontal)
+                            
+                            VStack(spacing: 0) {
+                                // HealthKit Toggle
+                                Toggle("Sync to Apple Health", isOn: $settings.isHealthKitSyncEnabled)
+                                    .font(.headline)
+                                    .foregroundColor(Theme.textPrimary)
+                                    .padding()
+                                    .background(Theme.surface)
+                                    .tint(Theme.accent)
+                                    .onChange(of: settings.isHealthKitSyncEnabled) {
+                                        if settings.isHealthKitSyncEnabled {
+                                            HealthKitManager.shared.requestAuthorization { success, _ in
+                                                DispatchQueue.main.async {
+                                                    if !success {
+                                                        settings.isHealthKitSyncEnabled = false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                
+                                Divider().background(Theme.border.opacity(0.3))
+                                
+                                // Theme Override
+                                HStack {
+                                    Text("Appearance")
+                                        .font(.subheadline)
+                                        .foregroundColor(Theme.textPrimary)
+                                    Spacer()
+                                    Picker("Theme", selection: $settings.themePreference) {
+                                        Text("System").tag(0)
+                                        Text("Light").tag(1)
+                                        Text("Dark").tag(2)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 200)
+                                }
+                                .padding()
+                                .background(Theme.surface)
+                                
+                                Divider().background(Theme.border.opacity(0.3))
+                                
+                                // Exercise Vault Button
+                                NavigationLink(destination: ExerciseManagerView()) {
+                                    HStack {
+                                        Image(systemName: "archivebox.fill")
+                                            .foregroundColor(Theme.accent)
+                                        Text("The Exercise Vault")
+                                            .font(.headline)
+                                            .foregroundColor(Theme.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .foregroundColor(Theme.textSecondary)
+                                    }
+                                    .padding()
+                                    .background(Theme.surface)
+                                }
+                            }
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                        }
+                    }
+                    .padding(.top, 20)
+                }
+            }
+            .navigationTitle("Command Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        try? modelContext.save()
+                        dismiss()
+                    }
+                    .foregroundColor(Theme.accent)
+                }
+            }
+        }
+    }
+}
+
+
+
+#Preview {
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self])
+    let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+    let container = try! ModelContainer(for: schema, configurations: [config])
+    
+    let dummySettings = UserSettings()
+    container.mainContext.insert(dummySettings)
+    
+    return SettingsView(settings: dummySettings)
+        .modelContainer(container)
+}
