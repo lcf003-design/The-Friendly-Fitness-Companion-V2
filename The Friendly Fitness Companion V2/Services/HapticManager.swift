@@ -20,6 +20,11 @@ final class HapticManager {
         generator.notificationOccurred(.success)
     }
     
+    func playSelection() {
+        let generator = UISelectionFeedbackGenerator()
+        generator.selectionChanged()
+    }
+    
     func playPR() {
         // A distinct pattern for hitting a Personal Record
         let generator = UINotificationFeedbackGenerator()
