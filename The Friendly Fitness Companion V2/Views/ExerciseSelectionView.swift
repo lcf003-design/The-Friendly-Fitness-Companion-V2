@@ -3,9 +3,11 @@ import SwiftData
 
 struct ExerciseSelectionView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     
     @State private var searchText = ""
+    @State private var isShowingAddSheet = false
     
     var onSelect: (Exercise) -> Void
     
@@ -57,6 +59,9 @@ struct ExerciseSelectionView: View {
                                         }
                                     }
                                 }
+                                .onDelete { indexSet in
+                                    deleteExercises(at: indexSet, in: muscle)
+                                }
                             }
                             .listRowBackground(Theme.surface)
                         }
@@ -70,13 +75,33 @@ struct ExerciseSelectionView: View {
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        isShowingAddSheet = true
+                    }) {
+                        Image(systemName: "plus")
+                            .foregroundColor(Theme.accent)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
                 }
             }
+            .sheet(isPresented: $isShowingAddSheet) {
+                AddExerciseSheet()
+            }
         }
+    }
+    
+    private func deleteExercises(at offsets: IndexSet, in muscle: String) {
+        guard let exercisesInGroup = groupedExercises[muscle] else { return }
+        for index in offsets {
+            let exerciseToDelete = exercisesInGroup[index]
+            modelContext.delete(exerciseToDelete)
+        }
+        try? modelContext.save()
     }
 }
 

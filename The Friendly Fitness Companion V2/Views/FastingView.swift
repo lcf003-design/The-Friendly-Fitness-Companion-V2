@@ -23,6 +23,11 @@ struct FastingView: View {
     @State private var selectedProtocolHours: Int = 16
     @State private var selectedPhase: FastingPhase?
     
+    // Level Up Gamification State
+    @State private var showLevelUp: Bool = false
+    @State private var levelUpPhase: FastingPhase? = nil
+    @State private var trackedPhaseTitle: String = ""
+    
     // Hold to Break Fast mechanics
     @State private var holdTimer: Timer?
     @State private var holdProgress: CGFloat = 0.0
@@ -122,6 +127,55 @@ struct FastingView: View {
                     }
                 }
             }
+            .onAppear {
+                trackedPhaseTitle = currentPhaseData.title
+            }
+            .onChange(of: currentPhaseData.title) { oldValue, newValue in
+                // Only trigger if we are actively fasting, the title actually changed, and we have an initial tracked title
+                if activeFast != nil && !trackedPhaseTitle.isEmpty && trackedPhaseTitle != newValue {
+                    triggerLevelUp(newPhase: currentPhaseData)
+                }
+                trackedPhaseTitle = newValue
+            }
+            .overlay(
+                Group {
+                    if showLevelUp, let phase = levelUpPhase {
+                        ZStack {
+                            // Full screen color flash
+                            phase.color.opacity(0.9)
+                                .ignoresSafeArea()
+                                .background(.ultraThinMaterial)
+                            
+                            VStack(spacing: 24) {
+                                Image(systemName: phase.icon)
+                                    .font(.system(size: 80))
+                                    .foregroundColor(.white)
+                                    .shadow(color: .white.opacity(0.8), radius: 30, x: 0, y: 0)
+                                    .scaleEffect(showLevelUp ? 1.0 : 0.5)
+                                    .animation(.spring(response: 0.4, dampingFraction: 0.5).delay(0.1), value: showLevelUp)
+                                
+                                VStack(spacing: 8) {
+                                    Text("PHASE UNLOCKED")
+                                        .font(Theme.Typography.technical(16, weight: .black))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .tracking(4)
+                                    
+                                    Text(phase.title.uppercased())
+                                        .font(.system(size: 36, weight: .black, design: .rounded))
+                                        .foregroundColor(.white)
+                                        .multilineTextAlignment(.center)
+                                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 3)
+                                }
+                                .offset(y: showLevelUp ? 0 : 20)
+                                .opacity(showLevelUp ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.2), value: showLevelUp)
+                            }
+                        }
+                        .transition(.opacity)
+                        .zIndex(100)
+                    }
+                }
+            )
             .navigationTitle("The Fasting Toolbox")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -273,31 +327,25 @@ struct FastingView: View {
             // Angular Gradient Progress
             let colors = activeFast != nil ? currentPhaseData.gradientColors : [Theme.textSecondary, Theme.border]
             
-            Circle()
-                .trim(from: 0.0, to: CGFloat(progress))
-                .stroke(
-                    AngularGradient(
-                        colors: colors,
-                        center: .center,
-                        startAngle: .degrees(-90),
-                        endAngle: .degrees(270)
-                    ),
-                    style: StrokeStyle(lineWidth: 20, lineCap: .round)
-                )
-                .frame(width: 280, height: 280)
-                .rotationEffect(.degrees(-90))
-                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: progress)
-            
-            // Glowing Playhead (Orb)
-            if activeFast != nil && progress > 0 {
+            // CoreMotion Liquid Sphere
+            ZStack {
                 Circle()
-                    .fill(Color.white)
-                    .frame(width: 20, height: 20)
-                    .shadow(color: colors.last ?? .white, radius: 10)
-                    .offset(y: -140)
-                    .rotationEffect(.degrees(progress * 360))
-                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: progress)
+                    .fill(.black.opacity(0.5)) // Deep recess background
+                
+                LiquidSphereView(progress: activeFast != nil ? progress : 0.0, colors: colors)
+                    .opacity(0.85)
             }
+            .frame(width: 260, height: 260)
+            .clipShape(Circle())
+            .shadow(color: .black.opacity(0.8), radius: 15, x: 0, y: 10)
+            
+            // Glass Rim
+            Circle()
+                .stroke(
+                    LinearGradient(colors: [.white.opacity(0.4), .clear, .black.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    lineWidth: 4
+                )
+                .frame(width: 260, height: 260)
             
             VStack(spacing: 8) {
                 if let fast = activeFast {
@@ -311,7 +359,7 @@ struct FastingView: View {
                     Text(formatTime(elapsedHours * 3600))
                         .font(.system(size: 44, weight: .black, design: .monospaced))
                         .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 2)
+                        .shadow(color: .black, radius: 6, x: 0, y: 2)
                     
                     Text("TARGET: \(fast.targetHours) HRS")
                         .font(Theme.Typography.technical(12, weight: .bold))
@@ -467,6 +515,32 @@ struct FastingView: View {
         let seconds = Int(totalSeconds) % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
     }
+    
+    // MARK: - Level Up Logic
+    private func triggerLevelUp(newPhase: FastingPhase) {
+        levelUpPhase = newPhase
+        
+        // Massive Gamified Haptics
+        HapticManager.shared.playSuccess()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            HapticManager.shared.playHeavyImpact()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            HapticManager.shared.playHeavyImpact()
+        }
+        
+        // Show Animation
+        withAnimation(.easeIn(duration: 0.2)) {
+            showLevelUp = true
+        }
+        
+        // Auto-dismiss after 4 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            withAnimation(.easeOut(duration: 0.8)) {
+                showLevelUp = false
+            }
+        }
+    }
 }
 
 #Preview {
@@ -575,6 +649,8 @@ struct FastingPhaseDetailView: View {
                         }
                         .padding(.horizontal, 24)
                         .padding(.top, 10)
+                        
+                        Spacer(minLength: 40)
                     }
                     .padding(.bottom, 40)
                 }
@@ -662,6 +738,69 @@ struct AnimatedFluidBackground: View {
         .onAppear {
             withAnimation(.linear(duration: 12).repeatForever(autoreverses: true)) {
                 isAnimating = true
+            }
+        }
+    }
+}
+
+struct WaveShape: Shape {
+    var progress: CGFloat
+    var waveHeight: CGFloat
+    var phase: CGFloat
+    
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(progress, phase) }
+        set {
+            progress = newValue.first
+            phase = newValue.second
+        }
+    }
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        
+        let fillY = rect.height * (1.0 - progress)
+        
+        path.move(to: CGPoint(x: 0, y: rect.height))
+        path.addLine(to: CGPoint(x: 0, y: fillY))
+        
+        let frequency: CGFloat = 1.5
+        for x in stride(from: 0, through: rect.width, by: 2) {
+            let relativeX = x / rect.width
+            let y = fillY + sin(relativeX * .pi * 2 * frequency + phase) * waveHeight
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+        
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct LiquidSphereView: View {
+    var progress: Double
+    var colors: [Color]
+    @StateObject private var motion = MotionManager.shared
+    @State private var phase: CGFloat = 0.0
+    
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                // The Liquid Wave
+                WaveShape(progress: CGFloat(progress), waveHeight: 8, phase: phase)
+                    .fill(
+                        LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
+                    )
+                    // The liquid sloshes physically based on device roll
+                    .rotationEffect(.radians(-motion.roll * 0.8))
+                    // The liquid subtly stretches/squashes based on device pitch for 3D feel
+                    .scaleEffect(x: 1.0, y: 1.0 + CGFloat(abs(motion.pitch)) * 0.1)
+            }
+            .clipShape(Circle())
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+                phase = .pi * 2
             }
         }
     }
