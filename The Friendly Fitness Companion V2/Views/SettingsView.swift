@@ -7,6 +7,10 @@ struct SettingsView: View {
     
     @Bindable var settings: UserSettings
     
+    @Query private var allSessions: [WorkoutSession]
+    @State private var exportedURL: URL?
+    @State private var showShareSheet = false
+    
     let tempoOptions = [
         "Mentzer HIT (4-2-4)",
         "Standard Hypertrophy (3-1-3)",
@@ -68,6 +72,24 @@ struct SettingsView: View {
                                     .padding()
                                     .background(Theme.surface)
                                 }
+                                
+                                Divider().background(Theme.border.opacity(0.3))
+                                
+                                // Ghost Target Picker
+                                HStack {
+                                    Text("Ghost Target")
+                                        .font(.subheadline)
+                                        .foregroundColor(Theme.textPrimary)
+                                    Spacer()
+                                    Picker("Ghost Target", selection: $settings.ghostTrackingPreference) {
+                                        Text("Most Recent").tag(0)
+                                        Text("All-Time PR").tag(1)
+                                    }
+                                    .pickerStyle(.menu)
+                                    .tint(Theme.accent)
+                                }
+                                .padding()
+                                .background(Theme.surface)
                             }
                             .cornerRadius(12)
                             .padding(.horizontal)
@@ -141,6 +163,37 @@ struct SettingsView: View {
                             .cornerRadius(12)
                             .padding(.horizontal)
                         }
+                        
+                        // Section: Data Management
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("DATA MANAGEMENT")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .tracking(2)
+                                .padding(.horizontal)
+                            
+                            VStack(spacing: 0) {
+                                Button(action: {
+                                    if let url = ExportService.shared.generateCSV(sessions: allSessions) {
+                                        exportedURL = url
+                                        showShareSheet = true
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: "square.and.arrow.up")
+                                            .foregroundColor(Theme.accent)
+                                        Text("EXPORT WORKOUT HISTORY (CSV)")
+                                            .font(.headline)
+                                            .foregroundColor(Theme.textPrimary)
+                                        Spacer()
+                                    }
+                                    .padding()
+                                    .background(Theme.surface)
+                                }
+                            }
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                        }
                     }
                     .padding(.top, 20)
                 }
@@ -160,7 +213,25 @@ struct SettingsView: View {
                 }
             }
         }
+        .sheet(isPresented: $showShareSheet) {
+            if let url = exportedURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
     }
+}
+
+// ShareSheet Wrapper
+struct ShareSheet: UIViewControllerRepresentable {
+    var activityItems: [Any]
+    var applicationActivities: [UIActivity]? = nil
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 

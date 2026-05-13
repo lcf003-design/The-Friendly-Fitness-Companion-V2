@@ -9,6 +9,32 @@ struct JournalView: View {
     @State private var activeSession: WorkoutSession?
     @State private var isShowingTemplateBuilder = false
     
+    enum FilterType: String, CaseIterable {
+        case all = "ALL"
+        case failure = "ABSOLUTE FAILURE"
+        case restPause = "REST-PAUSE"
+    }
+    @State private var activeFilter: FilterType = .all
+    
+    private var filteredSessions: [WorkoutSession] {
+        switch activeFilter {
+        case .all:
+            return sessions
+        case .failure:
+            return sessions.filter { session in
+                session.exercises.contains { exercise in
+                    exercise.sets.contains { $0.hitFailure }
+                }
+            }
+        case .restPause:
+            return sessions.filter { session in
+                session.exercises.contains { exercise in
+                    exercise.sets.contains { !$0.restPauses.isEmpty }
+                }
+            }
+        }
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -79,21 +105,45 @@ struct JournalView: View {
                     Divider().background(Theme.border.opacity(0.3)).padding(.vertical, 16)
                     
                     // HISTORY LIST
-                    // HISTORY LIST
-                    if sessions.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(FilterType.allCases, id: \.self) { filter in
+                                    Button(action: {
+                                        withAnimation { activeFilter = filter }
+                                    }) {
+                                        Text(filter.rawValue)
+                                            .font(Theme.Typography.technical(12, weight: .bold))
+                                            .foregroundColor(activeFilter == filter ? Theme.midnightMatte : Theme.textSecondary)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(activeFilter == filter ? Theme.accent : Theme.surface)
+                                            .cornerRadius(20)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 20)
+                                                    .stroke(activeFilter == filter ? Theme.accent : Theme.border, lineWidth: 1)
+                                            )
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                        .padding(.bottom, 8)
+                    }
+                    if filteredSessions.isEmpty {
                         VStack(spacing: 20) {
                             Image(systemName: "book.closed")
                                 .font(.system(size: 60))
                                 .foregroundColor(Theme.border)
                             
-                            Text("No history. Time to bleed.")
+                            Text(sessions.isEmpty ? "No history. Time to bleed." : "No sessions match filter.")
                                 .font(Theme.Typography.technical(16))
                                 .foregroundColor(Theme.textSecondary)
                         }
                         .frame(maxHeight: .infinity)
                     } else {
                         List {
-                            ForEach(sessions) { session in
+                            ForEach(filteredSessions) { session in
                                 SessionRow(session: session)
                             }
                             .onDelete(perform: deleteSessions)
@@ -156,6 +206,8 @@ struct JournalView: View {
 
 struct SessionRow: View {
     let session: WorkoutSession
+    @State private var showShareSheet = false
+    @State private var generatedImage: UIImage?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -175,7 +227,12 @@ struct SessionRow: View {
                 
                 Spacer()
                 
-                ShareLink(item: generateShareText()) {
+                Button(action: {
+                    if let image = renderSessionReport() {
+                        generatedImage = image
+                        showShareSheet = true
+                    }
+                }) {
                     Image(systemName: "square.and.arrow.up")
                         .font(.caption)
                         .foregroundColor(Theme.textSecondary)
@@ -183,10 +240,86 @@ struct SessionRow: View {
             }
         }
         .padding(.vertical, 4)
+        .sheet(isPresented: $showShareSheet) {
+            if let image = generatedImage {
+                ShareSheet(activityItems: [image])
+            }
+        }
     }
     
-    private func generateShareText() -> String {
-        return "I just crushed the '\(session.name)' grind with an intensity score of \(session.totalIntensityScore) on The Friendly Fitness Companion! Time to bleed. 🩸💪"
+    @MainActor
+    private func renderSessionReport() -> UIImage? {
+        let view = SessionReportView(session: session)
+            .frame(width: 800) // Fixed width to ensure high fidelity rendering
+        
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 3.0 // High scale factor for crisp sharing
+        
+        return renderer.uiImage
+    }
+}
+
+// MARK: - Shareable Lookbook Component
+struct SessionReportView: View {
+    let session: WorkoutSession
+    
+    var body: some View {
+        VStack(spacing: 40) {
+            // Header
+            VStack(spacing: 8) {
+                Text(session.name.uppercased())
+                    .font(Theme.Typography.technical(48, weight: .black))
+                    .foregroundColor(Theme.textPrimary)
+                    .multilineTextAlignment(.center)
+                
+                Text(session.timestamp.formatted(date: .abbreviated, time: .shortened).uppercased())
+                    .font(Theme.Typography.technical(16, weight: .bold))
+                    .foregroundColor(Theme.textSecondary)
+                    .tracking(2)
+            }
+            
+            // Intensity Score
+            VStack(spacing: 0) {
+                Text("\(session.totalIntensityScore)")
+                    .font(Theme.Typography.technical(120, weight: .black))
+                    .foregroundColor(Theme.accent)
+                Text("INTENSITY SCORE")
+                    .font(Theme.Typography.technical(18, weight: .bold))
+                    .foregroundColor(Theme.textSecondary)
+                    .tracking(4)
+            }
+            
+            // Exercises List
+            VStack(alignment: .leading, spacing: 16) {
+                ForEach(session.exercises) { exercise in
+                    let name = exercise.exerciseRef?.name.uppercased() ?? "UNKNOWN"
+                    let totalVolume = exercise.sets.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
+                    let setSummary = String(format: "%d SETS • %.1f VOL", exercise.sets.count, totalVolume)
+                    
+                    HStack {
+                        Text(name)
+                            .font(Theme.Typography.technical(20, weight: .bold))
+                            .foregroundColor(Theme.textPrimary)
+                        Spacer()
+                        Text(setSummary)
+                            .font(Theme.Typography.technical(16, weight: .bold))
+                            .foregroundColor(Theme.warningOrange)
+                    }
+                    Divider().background(Theme.border.opacity(0.3))
+                }
+            }
+            .padding(.horizontal, 40)
+            
+            Spacer(minLength: 40)
+            
+            // Watermark
+            Text("THE FRIENDLY FITNESS COMPANION — COMMAND CENTER DATA V2")
+                .font(Theme.Typography.technical(12, weight: .bold))
+                .foregroundColor(Theme.textSecondary.opacity(0.5))
+                .tracking(3)
+        }
+        .padding(60)
+        .background(Theme.midnightMatte)
     }
 }
 

@@ -140,6 +140,8 @@ struct FastingView: View {
             .overlay(
                 Group {
                     if showLevelUp, let phase = levelUpPhase {
+                        // Fixed: Replaced HapticManager.shared.trigger(.light) with the correct call
+                        // HapticManager.shared.playLightImpact() 
                         ZStack {
                             // Full screen color flash
                             phase.color.opacity(0.9)

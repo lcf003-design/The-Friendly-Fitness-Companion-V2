@@ -100,27 +100,36 @@ struct DashboardView: View {
                                     .tracking(2)
                                     .padding(.horizontal)
                                 
+                                let totalVolume = volumeMap.reduce(0) { $0 + $1.volume }
                                 Chart {
                                     ForEach(volumeMap, id: \.muscle) { data in
+                                        let percentage = totalVolume > 0 ? (data.volume / totalVolume) * 100 : 0
+                                        
                                         BarMark(
-                                            x: .value("Volume", data.volume),
-                                            y: .value("Muscle", data.muscle.uppercased())
+                                            x: .value("Muscle", data.muscle.uppercased()),
+                                            y: .value("Volume", data.volume),
+                                            width: .fixed(4)
                                         )
-                                        .foregroundStyle(Theme.accent.gradient)
-                                        .cornerRadius(4)
+                                        .foregroundStyle(Theme.accent)
+                                        .annotation(position: .top, alignment: .center) {
+                                            Text("\(Int(percentage))%")
+                                                .font(Theme.Typography.technical(16, weight: .black))
+                                                .foregroundColor(Theme.textPrimary)
+                                        }
                                     }
                                 }
-                                .frame(height: max(150, CGFloat(volumeMap.count * 30)))
+                                .frame(height: 220)
                                 .padding()
+                                .padding(.top, 20)
                                 .background(Theme.surface)
                                 .cornerRadius(16)
                                 .padding(.horizontal)
-                                .chartXAxis(.hidden)
-                                .chartYAxis {
+                                .chartXAxis {
                                     AxisMarks { _ in
                                         AxisValueLabel().foregroundStyle(Theme.textPrimary).font(Theme.Typography.technical(10, weight: .bold))
                                     }
                                 }
+                                .chartYAxis(.hidden)
                             }
                         }
                         

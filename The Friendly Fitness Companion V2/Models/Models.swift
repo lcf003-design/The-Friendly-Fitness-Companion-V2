@@ -115,7 +115,10 @@ final class UserSettings {
     var trainingAgeYears: Int = 0
     var currentPhase: String = "Hypertrophy" // e.g., "Hypertrophy", "Strength", "Cutting", "Recomp"
     
-    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy") {
+    // Ghost Tracking
+    var ghostTrackingPreference: Int = 0 // 0 = Most Recent, 1 = All-Time PR
+    
+    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0) {
         self.id = id
         self.userName = userName
         self.bodyWeight = bodyWeight
@@ -132,6 +135,7 @@ final class UserSettings {
         self.heightInches = heightInches
         self.trainingAgeYears = trainingAgeYears
         self.currentPhase = currentPhase
+        self.ghostTrackingPreference = ghostTrackingPreference
     }
 }
 
