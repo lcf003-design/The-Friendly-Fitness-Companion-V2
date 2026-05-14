@@ -15,6 +15,7 @@ struct ProfileView: View {
     @State private var draftHeight = ""
     @State private var draftAge = ""
     @State private var draftPhase = "Hypertrophy"
+    @State private var isShowingFastingTimer = false
     
     let columns = [GridItem(.flexible()), GridItem(.flexible())]
     let phases = ["Hypertrophy", "Strength", "Cutting", "Recomp"]
@@ -253,6 +254,9 @@ struct ProfileView: View {
                 if let currentSettings = settings {
                     SettingsView(settings: currentSettings)
                 }
+            }
+            .fullScreenCover(isPresented: $isShowingFastingTimer) {
+                FastingView(isPresented: $isShowingFastingTimer)
             }
         }
     }

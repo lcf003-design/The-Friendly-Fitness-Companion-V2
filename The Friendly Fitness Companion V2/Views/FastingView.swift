@@ -115,16 +115,19 @@ struct FastingView: View {
                     .animation(.easeInOut(duration: 2.0), value: currentPhaseData.id)
                 }
                 
-                ScrollView {
-                    VStack(spacing: 30) {
-                        infographicCardsView
-                            .padding(.top, 20)
-                        
-                        timerHUDView
-                            .padding(.vertical, 20)
-                        
-                        controlsView
-                    }
+                VStack(spacing: 0) {
+                    Spacer(minLength: 10)
+                    
+                    infographicCardsView
+                    
+                    Spacer(minLength: 20)
+                    
+                    timerHUDView
+                    
+                    Spacer(minLength: 20)
+                    
+                    controlsView
+                        .padding(.bottom, 20)
                 }
             }
             .onAppear {
@@ -288,7 +291,7 @@ struct FastingView: View {
                                 }
                                 .padding()
                             }
-                            .frame(width: 260, height: 160)
+                            .frame(width: 240, height: 140)
                             .clipShape(RoundedRectangle(cornerRadius: 24))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 24)
@@ -323,32 +326,29 @@ struct FastingView: View {
         ZStack {
             // Recessed dial track
             Circle()
-                .stroke(Theme.border.opacity(0.2), lineWidth: 20)
-                .frame(width: 280, height: 280)
-                .shadow(color: .black.opacity(0.8), radius: 10, x: 0, y: 5) // Inner shadow effect
+                .stroke(Theme.border.opacity(0.2), lineWidth: 16)
+                .frame(width: 240, height: 240)
+                .shadow(color: .black.opacity(0.8), radius: 10, x: 0, y: 5)
             
-            // Angular Gradient Progress
             let colors = activeFast != nil ? currentPhaseData.gradientColors : [Theme.textSecondary, Theme.border]
             
-            // CoreMotion Liquid Sphere
             ZStack {
                 Circle()
-                    .fill(.black.opacity(0.5)) // Deep recess background
+                    .fill(.black.opacity(0.5))
                 
                 LiquidSphereView(progress: activeFast != nil ? progress : 0.0, colors: colors)
                     .opacity(0.85)
             }
-            .frame(width: 260, height: 260)
+            .frame(width: 220, height: 220)
             .clipShape(Circle())
             .shadow(color: .black.opacity(0.8), radius: 15, x: 0, y: 10)
             
-            // Glass Rim
             Circle()
                 .stroke(
                     LinearGradient(colors: [.white.opacity(0.4), .clear, .black.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing),
                     lineWidth: 4
                 )
-                .frame(width: 260, height: 260)
+                .frame(width: 220, height: 220)
             
             VStack(spacing: 8) {
                 if let fast = activeFast {
@@ -456,31 +456,40 @@ struct FastingView: View {
                         .foregroundColor(Theme.textSecondary)
                         .tracking(2)
                     
-                    ZStack {
-                        // Vault Housing
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(.black.opacity(0.4))
-                        
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(.white.opacity(0.1), lineWidth: 1)
-                        
-                        // The Spinning Wheel
+                    Menu {
                         Picker("Protocol", selection: $selectedProtocolHours) {
                             ForEach(fastingProtocols, id: \.1) { protocolName, hours in
                                 Text("\(hours) HRS — \(protocolName)")
-                                    .font(.system(size: 18, weight: .black, design: .rounded))
-                                    .foregroundColor(.white)
                                     .tag(hours)
                             }
                         }
-                        .pickerStyle(.wheel)
-                        .frame(height: 160)
-                        .onChange(of: selectedProtocolHours, initial: false) { oldValue, newValue in
-                            HapticManager.shared.playSelection()
+                    } label: {
+                        HStack {
+                            let selectedName = fastingProtocols.first(where: { $0.1 == selectedProtocolHours })?.0 ?? ""
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(selectedProtocolHours) HOURS")
+                                    .font(.system(size: 24, weight: .black, design: .rounded))
+                                    .foregroundColor(.white)
+                                Text(selectedName)
+                                    .font(Theme.Typography.technical(14))
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .foregroundColor(Theme.textSecondary)
                         }
+                        .padding()
+                        .background(Color.black.opacity(0.4))
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        )
                     }
-                    .frame(height: 160)
                     .padding(.horizontal)
+                    .onChange(of: selectedProtocolHours, initial: false) { oldValue, newValue in
+                        HapticManager.shared.playSelection()
+                    }
                 }
                 
                 // Start Button

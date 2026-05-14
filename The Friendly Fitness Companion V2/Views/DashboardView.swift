@@ -185,16 +185,26 @@ struct DashboardView: View {
                     .padding(.vertical)
                 }
             }
-            .navigationTitle("Command Center")
+            .navigationTitle("Dashboard")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        isShowingFastingToolbox = true
-                    }) {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button(action: {
+                            isShowingFastingToolbox = true
+                        }) {
+                            Label("Fasting Calculator", systemImage: "clock.fill")
+                        }
+                        
+                        Button(action: {
+                            // Placeholder for future tools
+                        }) {
+                            Label("More Tools Coming Soon...", systemImage: "hammer.fill")
+                        }
+                    } label: {
                         Image(systemName: "wrench.and.screwdriver.fill")
                             .foregroundColor(Theme.textSecondary)
                     }

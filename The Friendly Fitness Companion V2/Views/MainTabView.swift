@@ -62,35 +62,6 @@ struct MainTabView: View {
             try? modelContext.save()
         }
         
-        // Temporary auto-seed for historical Chart data if empty or sparse
-        if sessions.count < 4 {
-            if let benchPress = allExercises.first(where: { $0.name == "Bench Press" }) {
-                
-                let day1 = Calendar.current.date(byAdding: .day, value: -6, to: Date())!
-                let day2 = Calendar.current.date(byAdding: .day, value: -4, to: Date())!
-                let day3 = Calendar.current.date(byAdding: .day, value: -2, to: Date())!
-                let day4 = Date()
-                
-                let s1 = WorkoutSession(name: "Chest Day", timestamp: day1, rpe: 8, exercises: [])
-                s1.exercises.append(WorkoutExercise(exerciseRef: benchPress, sets: [ExerciseSet(weight: 185, reps: 8)]))
-                
-                let s2 = WorkoutSession(name: "Heavy Push", timestamp: day2, rpe: 9, exercises: [])
-                s2.exercises.append(WorkoutExercise(exerciseRef: benchPress, sets: [ExerciseSet(weight: 195, reps: 7)]))
-                
-                let s3 = WorkoutSession(name: "Chest Grind", timestamp: day3, rpe: 9, exercises: [])
-                s3.exercises.append(WorkoutExercise(exerciseRef: benchPress, sets: [ExerciseSet(weight: 205, reps: 6)]))
-                
-                let s4 = WorkoutSession(name: "PR Attempt", timestamp: day4, rpe: 10, exercises: [])
-                s4.exercises.append(WorkoutExercise(exerciseRef: benchPress, sets: [ExerciseSet(weight: 225, reps: 3)]))
-                
-                modelContext.insert(s1)
-                modelContext.insert(s2)
-                modelContext.insert(s3)
-                modelContext.insert(s4)
-                
-                try? modelContext.save()
-            }
-        }
     }
 }
 
