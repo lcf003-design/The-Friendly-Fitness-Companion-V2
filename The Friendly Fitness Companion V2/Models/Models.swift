@@ -61,12 +61,17 @@ final class WorkoutExercise {
     var id: UUID = UUID()
     var exerciseRef: Exercise?
     
+    var loggedName: String = ""
+    var loggedTargetMuscle: String = ""
+    
     @Relationship(deleteRule: .cascade)
     var sets: [ExerciseSet] = []
     
     init(id: UUID = UUID(), exerciseRef: Exercise? = nil, sets: [ExerciseSet] = []) {
         self.id = id
         self.exerciseRef = exerciseRef
+        self.loggedName = exerciseRef?.name ?? "UNKNOWN"
+        self.loggedTargetMuscle = exerciseRef?.targetMuscle ?? "UNKNOWN"
         self.sets = sets
     }
 }
@@ -79,7 +84,21 @@ final class ExerciseSet {
     var hitFailure: Bool = false
     var forcedReps: Int = 0
     var negatives: Int = 0
-    var restPauses: [Int] = [] // Array of reps achieved after pauses
+    // CloudKit doesn't support primitive arrays, so we store it as a comma-separated string
+    var restPausesData: String = ""
+    var notes: String = ""
+    
+    // Computed property for UI usage
+    var restPauses: [Int] {
+        get {
+            guard !restPausesData.isEmpty else { return [] }
+            return restPausesData.split(separator: ",").compactMap { Int($0) }
+        }
+        set {
+            restPausesData = newValue.map { String($0) }.joined(separator: ",")
+        }
+    }
+    
     var isCompleted: Bool = false
     
     init(id: UUID = UUID(), weight: Double, reps: Int, hitFailure: Bool = false, forcedReps: Int = 0, negatives: Int = 0, restPauses: [Int] = [], isCompleted: Bool = false) {
@@ -89,8 +108,10 @@ final class ExerciseSet {
         self.hitFailure = hitFailure
         self.forcedReps = forcedReps
         self.negatives = negatives
-        self.restPauses = restPauses
         self.isCompleted = isCompleted
+        
+        // This setter triggers the data population
+        self.restPauses = restPauses
     }
 }
 

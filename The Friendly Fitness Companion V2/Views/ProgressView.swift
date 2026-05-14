@@ -5,6 +5,7 @@ import Charts
 struct ProgressView: View {
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     @Query(sort: \WorkoutSession.timestamp) private var allSessions: [WorkoutSession] // Oldest to newest for plotting
+    @Query private var userSettings: [UserSettings]
     
     @State private var selectedExercise: Exercise?
     @State private var selectedDate: Date?
@@ -88,14 +89,14 @@ struct ProgressView: View {
                                     Chart(dataPoints) { point in
                                         LineMark(
                                             x: .value("Date", point.date),
-                                            y: .value("1RM (lbs)", point.oneRepMax)
+                                            y: .value("1RM (\(userSettings.first?.weightUnit ?? "lb"))", point.oneRepMax)
                                         )
                                         .interpolationMethod(.monotone)
                                         .foregroundStyle(Theme.accent.gradient)
                                         
                                         PointMark(
                                             x: .value("Date", point.date),
-                                            y: .value("1RM (lbs)", point.oneRepMax)
+                                            y: .value("1RM (\(userSettings.first?.weightUnit ?? "lb"))", point.oneRepMax)
                                         )
                                         .foregroundStyle(Theme.warningOrange)
                                         .symbolSize(60)
@@ -103,7 +104,7 @@ struct ProgressView: View {
                                         AreaMark(
                                             x: .value("Date", point.date),
                                             yStart: .value("Base", 0),
-                                            yEnd: .value("1RM (lbs)", point.oneRepMax)
+                                            yEnd: .value("1RM (\(userSettings.first?.weightUnit ?? "lb"))", point.oneRepMax)
                                         )
                                         .interpolationMethod(.monotone)
                                         .foregroundStyle(
@@ -121,7 +122,7 @@ struct ProgressView: View {
                                                 .foregroundStyle(Theme.textSecondary.opacity(0.5))
                                                 .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
                                                     VStack(spacing: 4) {
-                                                        Text("\(Int(closestPoint.oneRepMax)) lbs")
+                                                        Text("\(Int(closestPoint.oneRepMax)) \(userSettings.first?.weightUnit ?? "lb")")
                                                             .font(Theme.Typography.technical(16, weight: .bold))
                                                             .foregroundColor(Theme.warningOrange)
                                                         Text(closestPoint.date.formatted(.dateTime.month().day()))
@@ -203,8 +204,11 @@ struct ProgressView: View {
         var points: [ChartDataPoint] = []
         
         for session in allSessions {
-            // Find if this session included the target exercise
-            let matchingWorkoutExercises = session.exercises.filter { $0.exerciseRef?.id == targetExercise.id }
+            // Find if this session included the target exercise by tracking the frozen string
+            let matchingWorkoutExercises = session.exercises.filter { wEx in
+                let rawName = wEx.loggedName.isEmpty ? (wEx.exerciseRef?.name ?? "") : wEx.loggedName
+                return rawName.localizedCaseInsensitiveCompare(targetExercise.name) == .orderedSame
+            }
             
             var best1RMForSession = 0.0
             
@@ -237,7 +241,7 @@ struct ChartDataPoint: Identifiable {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

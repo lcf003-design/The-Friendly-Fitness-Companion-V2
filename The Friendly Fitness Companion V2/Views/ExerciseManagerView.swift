@@ -5,6 +5,7 @@ struct ExerciseManagerView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     @Query private var allWorkoutExercises: [WorkoutExercise]
+    @Query private var userSettings: [UserSettings]
     
     @State private var isShowingAddSheet = false
     
@@ -42,10 +43,11 @@ struct ExerciseManagerView: View {
                     // THE ORACLE: PR TRACKING
                     Section {
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 16) {
-                                PRCard(title: "BENCH", max1RM: max1RM(for: "Bench Press"))
-                                PRCard(title: "SQUAT", max1RM: max1RM(for: "Squat"))
-                                PRCard(title: "DEADLIFT", max1RM: max1RM(for: "Deadlift"))
+                            HStack(spacing: 12) {
+                                let unit = userSettings.first?.weightUnit ?? "lb"
+                                PRCard(title: "BENCH", max1RM: max1RM(for: "Bench Press"), unit: unit)
+                                PRCard(title: "SQUAT", max1RM: max1RM(for: "Squat"), unit: unit)
+                                PRCard(title: "DEADLIFT", max1RM: max1RM(for: "Deadlift"), unit: unit)
                             }
                             .padding(.vertical, 8)
                             .padding(.horizontal)
@@ -62,7 +64,9 @@ struct ExerciseManagerView: View {
                     ForEach(groupedExercises.keys.sorted(), id: \.self) { muscle in
                         Section {
                             ForEach(groupedExercises[muscle] ?? []) { exercise in
-                                ExerciseRowView(exercise: exercise)
+                                NavigationLink(destination: LazyView(ExerciseHistoryView(exercise: exercise))) {
+                                    ExerciseRowView(exercise: exercise)
+                                }
                             }
                             .onDelete { indexSet in
                                 deleteExercises(at: indexSet, in: muscle)
@@ -108,6 +112,7 @@ struct ExerciseManagerView: View {
 struct PRCard: View {
     let title: String
     let max1RM: Double
+    let unit: String
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -117,7 +122,7 @@ struct PRCard: View {
             Text(max1RM > 0 ? "\(max1RM, specifier: "%.1f")" : "---")
                 .font(.system(size: 24, weight: .black, design: .rounded))
                 .foregroundColor(Theme.textPrimary)
-            Text("LBS")
+            Text(unit.uppercased())
                 .font(Theme.Typography.technical(10, weight: .bold))
                 .foregroundColor(Theme.accent)
         }
@@ -262,7 +267,7 @@ struct AddExerciseSheet: View {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     
@@ -273,4 +278,15 @@ struct AddExerciseSheet: View {
         ExerciseManagerView()
     }
     .modelContainer(container)
+}
+
+// Prevents eager instantiation of views inside NavigationLinks
+struct LazyView<Content: View>: View {
+    let build: () -> Content
+    init(_ build: @autoclosure @escaping () -> Content) {
+        self.build = build
+    }
+    var body: Content {
+        build()
+    }
 }

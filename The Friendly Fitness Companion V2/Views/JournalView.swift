@@ -7,6 +7,7 @@ struct JournalView: View {
     @Query private var templates: [WorkoutTemplate]
     
     @State private var activeSession: WorkoutSession?
+    @State private var isActiveSessionNew: Bool = false
     @State private var isShowingTemplateBuilder = false
     
     enum FilterType: String, CaseIterable {
@@ -95,6 +96,14 @@ struct JournalView: View {
                                                 .stroke(Theme.border, lineWidth: 1)
                                         )
                                     }
+                                    .contextMenu {
+                                        Button(role: .destructive, action: {
+                                            modelContext.delete(template)
+                                            try? modelContext.save()
+                                        }) {
+                                            Label("Delete Routine", systemImage: "trash")
+                                        }
+                                    }
                                 }
                             }
                             .padding(.horizontal)
@@ -144,7 +153,13 @@ struct JournalView: View {
                     } else {
                         List {
                             ForEach(filteredSessions) { session in
-                                SessionRow(session: session)
+                                Button(action: {
+                                    isActiveSessionNew = false
+                                    activeSession = session
+                                }) {
+                                    SessionRow(session: session)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
                             .onDelete(perform: deleteSessions)
                             .listRowBackground(Theme.surface)
@@ -155,6 +170,7 @@ struct JournalView: View {
                     Button(action: {
                         let newSession = WorkoutSession(name: "Late Night Grind", timestamp: Date(), rpe: 8, exercises: [])
                         modelContext.insert(newSession)
+                        isActiveSessionNew = true
                         activeSession = newSession
                     }) {
                         Text("START GRIND")
@@ -175,7 +191,7 @@ struct JournalView: View {
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .fullScreenCover(item: $activeSession) { session in
-                WorkoutLoggerView(session: session)
+                WorkoutLoggerView(session: session, isNewSession: isActiveSessionNew)
             }
             .sheet(isPresented: $isShowingTemplateBuilder) {
                 TemplateBuilderView()
@@ -192,6 +208,7 @@ struct JournalView: View {
             newSession.exercises.append(workoutExercise)
         }
         
+        isActiveSessionNew = true
         activeSession = newSession
     }
     
@@ -292,7 +309,8 @@ struct SessionReportView: View {
             // Exercises List
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(session.exercises) { exercise in
-                    let name = exercise.exerciseRef?.name.uppercased() ?? "UNKNOWN"
+                    let rawName = exercise.loggedName.isEmpty ? (exercise.exerciseRef?.name ?? "UNKNOWN") : exercise.loggedName
+                    let name = rawName.uppercased()
                     let totalVolume = exercise.sets.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
                     let setSummary = String(format: "%d SETS • %.1f VOL", exercise.sets.count, totalVolume)
                     
@@ -324,7 +342,7 @@ struct SessionReportView: View {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

@@ -7,7 +7,7 @@ class ExportService {
     private init() {}
     
     func generateCSV(sessions: [WorkoutSession]) -> URL? {
-        var csvString = "Date,Workout Name,Exercise,Set,Weight,Reps,Intensity Score\n"
+        var csvString = "Date,Workout Name,Exercise,Set,Weight,Reps,Failure,Forced Reps,Negatives,Rest Pauses,Intensity Score\n"
         
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -19,11 +19,14 @@ class ExportService {
             let intensity = session.totalIntensityScore
             
             for exercise in session.exercises {
-                let exerciseName = exercise.exerciseRef?.name.replacingOccurrences(of: ",", with: " ") ?? "Unknown"
+                let rawName = exercise.loggedName.isEmpty ? (exercise.exerciseRef?.name ?? "Unknown") : exercise.loggedName
+                let exerciseName = rawName.replacingOccurrences(of: ",", with: " ")
                 
                 for (index, set) in exercise.sets.enumerated() {
                     let setNum = index + 1
-                    let line = "\(dateStr),\(workoutName),\(exerciseName),\(setNum),\(set.weight),\(set.reps),\(intensity)\n"
+                    let failureStr = set.hitFailure ? "Yes" : "No"
+                    let rpCount = set.restPauses.count
+                    let line = "\(dateStr),\(workoutName),\(exerciseName),\(setNum),\(set.weight),\(set.reps),\(failureStr),\(set.forcedReps),\(set.negatives),\(rpCount),\(intensity)\n"
                     csvString.append(line)
                 }
             }

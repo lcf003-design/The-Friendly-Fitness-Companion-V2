@@ -30,7 +30,7 @@ final class HealthKitManager {
         }
     }
     
-    func saveStrengthWorkout(startTime: Date, endTime: Date, name: String, completion: @escaping (Bool, Error?) -> Void) {
+    func saveStrengthWorkout(startTime: Date, endTime: Date, name: String, bodyWeight: Double?, completion: @escaping (Bool, Error?) -> Void) {
         guard isAvailable else {
             completion(false, nil)
             return
@@ -48,10 +48,12 @@ final class HealthKitManager {
                 return
             }
             
-            // Note: In a production app, we would calculate exact calories based on user weight and duration.
-            // For now, we calculate a standard weight-lifting metabolic equivalent (MET).
+            // Calculate accurate calories using Metabolic Equivalent (MET)
+            // Strength training MET is approximately 3.0. Formula: MET * weight in kg * duration in hours
+            // If bodyWeight is not set, we fall back to a standard 80.0kg estimate.
             let durationInHours = endTime.timeIntervalSince(startTime) / 3600.0
-            let estimatedCalories = 400.0 * durationInHours // Rough estimate
+            let weightInKg = bodyWeight ?? 80.0
+            let estimatedCalories = 3.0 * weightInKg * durationInHours
             
             let energyQuantity = HKQuantity(unit: .kilocalorie(), doubleValue: estimatedCalories)
             let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!

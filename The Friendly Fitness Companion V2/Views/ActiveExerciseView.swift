@@ -4,6 +4,7 @@ import SwiftData
 struct ActiveExerciseView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var workoutExercise: WorkoutExercise
+    var isEditMode: Bool = true
     
     // Fetch all instances of this specific exercise across history to find the Ghost
     @Query private var history: [WorkoutExercise]
@@ -21,8 +22,9 @@ struct ActiveExerciseView: View {
     // Plate Calculator State
     @State private var showPlateCalculator = false
     
-    init(workoutExercise: WorkoutExercise) {
+    init(workoutExercise: WorkoutExercise, isEditMode: Bool = true) {
         self.workoutExercise = workoutExercise
+        self.isEditMode = isEditMode
         
         let targetId = workoutExercise.exerciseRef?.id ?? UUID()
         let filter = #Predicate<WorkoutExercise> { wex in
@@ -78,7 +80,8 @@ struct ActiveExerciseView: View {
             
             VStack {
                 VStack(spacing: 4) {
-                    Text(workoutExercise.exerciseRef?.name.uppercased() ?? "UNKNOWN")
+                    let rawName = workoutExercise.loggedName.isEmpty ? (workoutExercise.exerciseRef?.name ?? "UNKNOWN") : workoutExercise.loggedName
+                    Text(rawName.uppercased())
                         .font(Theme.Typography.technical(24, weight: .black))
                         .foregroundColor(Theme.textPrimary)
                     
@@ -86,7 +89,8 @@ struct ActiveExerciseView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "ghost.fill")
                             let ghostLabel = userSettings.first?.ghostTrackingPreference == 1 ? "GHOST (PR):" : "GHOST (RECENT):"
-                            Text("\(ghostLabel) \(ghostMaxWeight, specifier: "%.1f") lbs")
+                            let weightStr = String(format: "%.1f", ghostMaxWeight)
+                            Text("\(ghostLabel) \(weightStr) \(userSettings.first?.weightUnit ?? "lb")")
                         }
                         .font(Theme.Typography.technical(12, weight: .bold))
                         .foregroundColor(Theme.textSecondary)
@@ -97,7 +101,8 @@ struct ActiveExerciseView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "bolt.fill")
                                 .foregroundColor(Theme.warningOrange)
-                            Text("EST 1RM: \(estimated1RM, specifier: "%.1f") lbs")
+                            let est1RMStr = String(format: "%.1f", estimated1RM)
+                            Text("EST 1RM: \(est1RMStr) \(userSettings.first?.weightUnit ?? "lb")")
                         }
                         .font(Theme.Typography.technical(12, weight: .bold))
                         .foregroundColor(Theme.accent)
@@ -141,7 +146,8 @@ struct ActiveExerciseView: View {
                 HStack {
                     Text("SET")
                         .frame(width: 40, alignment: .center)
-                    Text("LBS")
+                    let unit = userSettings.first?.weightUnit ?? "lb"
+                    Text(unit.uppercased())
                         .frame(maxWidth: .infinity, alignment: .center)
                     Text("REPS")
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -156,10 +162,15 @@ struct ActiveExerciseView: View {
                 // Sets List
                 ScrollView {
                     VStack(spacing: 12) {
-                        ForEach(workoutExercise.sets.indices, id: \.self) { index in
-                            SetRowView(setIndex: index + 1, exerciseSet: workoutExercise.sets[index], ghostMaxWeight: ghostMaxWeight) {
-                                startTimer()
-                            }
+                        ForEach(Array(workoutExercise.sets.enumerated()), id: \.element.id) { index, exerciseSet in
+                            SetRowView(
+                                setIndex: index + 1,
+                                exerciseSet: exerciseSet,
+                                ghostMaxWeight: ghostMaxWeight,
+                                isEditMode: isEditMode,
+                                onComplete: { startTimer() },
+                                onDelete: { deleteSet(exerciseSet) }
+                            )
                         }
                     }
                     .padding(.horizontal)
@@ -204,17 +215,19 @@ struct ActiveExerciseView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 
-                // Add Set Button
-                Button(action: addSet) {
-                    Text("ADD SET")
-                        .font(Theme.Typography.technical(16, weight: .bold))
-                        .foregroundColor(Theme.midnightMatte)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Theme.accent)
-                        .cornerRadius(12)
+                if isEditMode {
+                    // Add Set Button
+                    Button(action: addSet) {
+                        Text("ADD SET")
+                            .font(Theme.Typography.technical(16, weight: .bold))
+                            .foregroundColor(Theme.midnightMatte)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Theme.accent)
+                            .cornerRadius(12)
+                    }
+                    .padding()
                 }
-                .padding()
             }
         }
         .navigationTitle("The Grind")
@@ -310,13 +323,23 @@ struct ActiveExerciseView: View {
         
         HapticManager.shared.playLightImpact()
     }
+    
+    private func deleteSet(_ set: ExerciseSet) {
+        if let index = workoutExercise.sets.firstIndex(where: { $0.id == set.id }) {
+            workoutExercise.sets.remove(at: index)
+            modelContext.delete(set)
+            HapticManager.shared.playHeavyImpact()
+        }
+    }
 }
 
 struct SetRowView: View {
     let setIndex: Int
     @Bindable var exerciseSet: ExerciseSet
     let ghostMaxWeight: Double
+    var isEditMode: Bool = true
     var onComplete: (() -> Void)?
+    var onDelete: (() -> Void)?
     
     // Local bindings for textfields
     @State private var weightString: String = ""
@@ -328,45 +351,53 @@ struct SetRowView: View {
     @State private var isRPActive: Bool = false
     @State private var rpTimer: Timer?
     
+    // Notes
+    @State private var isShowingNotes: Bool = false
+    
     var body: some View {
         ZStack {
             VStack(spacing: 8) {
-            HStack {
-                // Set Completion Checkmark
-                Button(action: {
-                    exerciseSet.isCompleted.toggle()
-                    if exerciseSet.isCompleted {
-                        HapticManager.shared.playSuccess()
-                        onComplete?()
-                    }
-                }) {
-                    Image(systemName: exerciseSet.isCompleted ? "checkmark.square.fill" : "square")
-                        .foregroundColor(exerciseSet.isCompleted ? Theme.apexGreen : Theme.textSecondary)
-                        .font(.title3)
-                }
-                .frame(width: 40, alignment: .center)
-                
-                // Weight
-                TextField("-", text: $weightString)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.center)
-                    .font(.title2.bold())
-                    // Gold highlight if beating the Ghost!
-                    .foregroundColor((exerciseSet.weight > ghostMaxWeight && ghostMaxWeight > 0) ? Theme.warningOrange : Theme.textPrimary)
-                    .padding(.vertical, 8)
-                    .background(Theme.surface)
-                    .cornerRadius(8)
-                    .onChange(of: weightString) { 
-                        let newWeight = Double(weightString) ?? 0.0
-                        // Trigger PR Haptic if just crossed the threshold!
-                        if newWeight > ghostMaxWeight && exerciseSet.weight <= ghostMaxWeight && ghostMaxWeight > 0 {
-                            HapticManager.shared.playPR()
+                // MAIN ROW: Checkmark, Weight, Reps, RP/Fail Buttons
+                HStack(spacing: 8) {
+                    // Set Completion Checkmark
+                    Button(action: {
+                        if isEditMode {
+                            exerciseSet.isCompleted.toggle()
+                            if exerciseSet.isCompleted {
+                                HapticManager.shared.playSuccess()
+                                onComplete?()
+                            }
                         }
-                        exerciseSet.weight = newWeight 
+                    }) {
+                        Image(systemName: exerciseSet.isCompleted ? "checkmark.square.fill" : "square")
+                            .foregroundColor(exerciseSet.isCompleted ? Theme.apexGreen : Theme.textSecondary)
+                            .font(.title3)
                     }
-                
-                // Reps & HIT Techniques
-                VStack(spacing: 8) {
+                    .disabled(!isEditMode)
+                    .frame(width: 40, alignment: .center)
+                    
+                    // Weight
+                    TextField("-", text: $weightString)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.center)
+                        .font(.title2.bold())
+                        // Gold highlight if beating the Ghost!
+                        .foregroundColor((exerciseSet.weight > ghostMaxWeight && ghostMaxWeight > 0) ? Theme.warningOrange : Theme.textPrimary)
+                        .padding(.vertical, 8)
+                        .background(Theme.surface)
+                        .cornerRadius(8)
+                        .disabled(!isEditMode)
+                        .onChange(of: weightString) { 
+                            let newWeight = Double(weightString) ?? 0.0
+                            // Trigger PR Haptic if just crossed the threshold!
+                            if newWeight > ghostMaxWeight && exerciseSet.weight <= ghostMaxWeight && ghostMaxWeight > 0 {
+                                HapticManager.shared.playPR()
+                            }
+                            exerciseSet.weight = newWeight 
+                        }
+                        .frame(maxWidth: .infinity)
+                    
+                    // Reps
                     TextField("-", text: $repsString)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.center)
@@ -375,9 +406,65 @@ struct SetRowView: View {
                         .padding(.vertical, 8)
                         .background(Theme.surface)
                         .cornerRadius(8)
+                        .disabled(!isEditMode)
                         .onChange(of: repsString) { exerciseSet.reps = Int(repsString) ?? 0 }
+                        .frame(maxWidth: .infinity)
                     
-                    // HIT Inputs (Forced & Negatives)
+                    // Actions (Fail / Rest Pause / Notes)
+                    HStack(spacing: 12) {
+                        // Rest Pause Button
+                        Button(action: {
+                            HapticManager.shared.playLightImpact()
+                            exerciseSet.restPauses.append(0) // Add empty RP slot
+                            
+                            rpTimer?.invalidate()
+                            rpCountdown = 15
+                            isRPActive = true
+                            
+                            rpTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+                                if rpCountdown > 0 {
+                                    rpCountdown -= 1
+                                } else {
+                                    timer.invalidate()
+                                    isRPActive = false
+                                    HapticManager.shared.playHeavyImpact()
+                                }
+                            }
+                        }) {
+                            Image(systemName: "plus.forwardslash.minus")
+                                .foregroundColor(Theme.warningOrange)
+                        }
+                        .disabled(!isEditMode)
+                        
+                        // Failure Toggle
+                        Button(action: {
+                            HapticManager.shared.playHeavyImpact()
+                            exerciseSet.hitFailure.toggle()
+                        }) {
+                            Image(systemName: exerciseSet.hitFailure ? "flame.fill" : "flame")
+                                .foregroundColor(exerciseSet.hitFailure ? Theme.dangerRed : Theme.border)
+                        }
+                        .disabled(!isEditMode)
+                        
+                        // Notes Toggle
+                        Button(action: {
+                            HapticManager.shared.playLightImpact()
+                            withAnimation {
+                                isShowingNotes.toggle()
+                            }
+                        }) {
+                            Image(systemName: "square.and.pencil")
+                                .foregroundColor((isShowingNotes || !exerciseSet.notes.isEmpty) ? Theme.accent : Theme.border)
+                        }
+                    }
+                    .frame(width: 100, alignment: .center)
+                }
+                
+                // SUB ROW: HIT Inputs (Forced & Negatives)
+                HStack(spacing: 8) {
+                    Spacer().frame(width: 40) // Match Checkmark width
+                    Spacer().frame(maxWidth: .infinity) // Match Weight width
+                    
                     HStack(spacing: 8) {
                         // Forced Reps
                         HStack(spacing: 4) {
@@ -390,6 +477,7 @@ struct SetRowView: View {
                                     HapticManager.shared.playSelection()
                                 } 
                             }
+                            .disabled(!isEditMode)
                             Text("\(exerciseSet.forcedReps)")
                                 .font(Theme.Typography.technical(12))
                                 .foregroundColor(Theme.textPrimary)
@@ -398,6 +486,7 @@ struct SetRowView: View {
                                 exerciseSet.forcedReps += 1 
                                 HapticManager.shared.playSelection()
                             }
+                            .disabled(!isEditMode)
                         }
                         .foregroundColor(Theme.accent)
                         
@@ -412,6 +501,7 @@ struct SetRowView: View {
                                     HapticManager.shared.playSelection()
                                 } 
                             }
+                            .disabled(!isEditMode)
                             Text("\(exerciseSet.negatives)")
                                 .font(Theme.Typography.technical(12))
                                 .foregroundColor(Theme.textPrimary)
@@ -420,48 +510,35 @@ struct SetRowView: View {
                                 exerciseSet.negatives += 1 
                                 HapticManager.shared.playSelection()
                             }
+                            .disabled(!isEditMode)
                         }
                         .foregroundColor(Theme.warningOrange)
                     }
-                }
-                .frame(maxWidth: .infinity)
-                
-                // Actions (Fail / Rest Pause)
-                HStack(spacing: 12) {
-                    // Rest Pause Button
-                    Button(action: {
-                        HapticManager.shared.playLightImpact()
-                        exerciseSet.restPauses.append(0) // Add empty RP slot
-                        
-                        rpTimer?.invalidate()
-                        rpCountdown = 15
-                        isRPActive = true
-                        
-                        rpTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-                            if rpCountdown > 0 {
-                                rpCountdown -= 1
-                            } else {
-                                timer.invalidate()
-                                isRPActive = false
-                                HapticManager.shared.playHeavyImpact()
-                            }
-                        }
-                    }) {
-                        Image(systemName: "plus.forwardslash.minus")
-                            .foregroundColor(Theme.warningOrange)
-                    }
+                    .frame(maxWidth: .infinity) // Match Reps width
                     
-                    // Failure Toggle
-                    Button(action: {
-                        HapticManager.shared.playHeavyImpact()
-                        exerciseSet.hitFailure.toggle()
-                    }) {
-                        Image(systemName: exerciseSet.hitFailure ? "flame.fill" : "flame")
-                            .foregroundColor(exerciseSet.hitFailure ? Theme.dangerRed : Theme.border)
-                    }
+                    Spacer().frame(width: 100) // Match Actions width
                 }
-                .frame(width: 80, alignment: .center)
-            }
+                
+                // NOTES ROW
+                if isShowingNotes || !exerciseSet.notes.isEmpty {
+                    TextField("Set notes...", text: Binding(
+                        get: { exerciseSet.notes },
+                        set: { exerciseSet.notes = $0 }
+                    ))
+                    .font(Theme.Typography.technical(14))
+                    .foregroundColor(Theme.textPrimary)
+                    .padding(12)
+                    .background(Theme.surface)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Theme.border.opacity(0.5), lineWidth: 1)
+                    )
+                    .disabled(!isEditMode)
+                    .padding(.leading, 40) // Match checkmark width for nice indent
+                    .padding(.trailing, 10)
+                }
+
             
             // Rest Pauses Display
             if !exerciseSet.restPauses.isEmpty {
@@ -483,6 +560,7 @@ struct SetRowView: View {
                         .background(Theme.surface)
                         .cornerRadius(6)
                         .foregroundColor(Theme.warningOrange)
+                        .disabled(!isEditMode)
                     }
                     Spacer()
                 }
@@ -503,7 +581,16 @@ struct SetRowView: View {
                     )
                     .opacity(0.95)
             }
+            }
         }
+        .contextMenu {
+            if isEditMode {
+                Button(role: .destructive, action: {
+                    onDelete?()
+                }) {
+                    Label("Delete Set", systemImage: "trash")
+                }
+            }
         }
         .onAppear {
             if exerciseSet.weight > 0 { weightString = String(format: "%.1f", exerciseSet.weight) }
@@ -592,21 +679,24 @@ struct PlateCalculatorPopover: View {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
-    let container = try! ModelContainer(for: schema, configurations: [config])
+    let container = try? ModelContainer(for: schema, configurations: [config])
     
+    guard let safeContainer = container else {
+        return AnyView(Text("Preview failed to load container"))
+    }
     let dummyRef = Exercise(name: "Incline Dumbbell Press", targetMuscle: "Chest")
     let dummyWex = WorkoutExercise(exerciseRef: dummyRef)
-    container.mainContext.insert(dummyRef)
-    container.mainContext.insert(dummyWex)
+    safeContainer.mainContext.insert(dummyRef)
+    safeContainer.mainContext.insert(dummyWex)
     
     // Add dummy set
     let dummySet = ExerciseSet(weight: 80, reps: 10, hitFailure: true, restPauses: [4, 2])
     dummyWex.sets.append(dummySet)
     
-    return NavigationStack {
+    return AnyView(NavigationStack {
         ActiveExerciseView(workoutExercise: dummyWex)
     }
-    .modelContainer(container)
+    .modelContainer(safeContainer))
 }

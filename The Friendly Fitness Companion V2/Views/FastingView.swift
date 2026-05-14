@@ -140,8 +140,6 @@ struct FastingView: View {
             .overlay(
                 Group {
                     if showLevelUp, let phase = levelUpPhase {
-                        // Fixed: Replaced HapticManager.shared.trigger(.light) with the correct call
-                        // HapticManager.shared.playLightImpact() 
                         ZStack {
                             // Full screen color flash
                             phase.color.opacity(0.9)
@@ -172,6 +170,9 @@ struct FastingView: View {
                                 .opacity(showLevelUp ? 1 : 0)
                                 .animation(.easeOut(duration: 0.4).delay(0.2), value: showLevelUp)
                             }
+                        }
+                        .onAppear {
+                            HapticManager.shared.playLightImpact()
                         }
                         .transition(.opacity)
                         .zIndex(100)
@@ -546,7 +547,7 @@ struct FastingView: View {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

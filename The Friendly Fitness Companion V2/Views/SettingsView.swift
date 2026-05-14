@@ -144,6 +144,24 @@ struct SettingsView: View {
                                 
                                 Divider().background(Theme.border.opacity(0.3))
                                 
+                                // Weight Unit Selection
+                                HStack {
+                                    Text("Weight Unit")
+                                        .font(.subheadline)
+                                        .foregroundColor(Theme.textPrimary)
+                                    Spacer()
+                                    Picker("Weight Unit", selection: $settings.weightUnit) {
+                                        Text("lbs").tag("lb")
+                                        Text("kg").tag("kg")
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 150)
+                                }
+                                .padding()
+                                .background(Theme.surface)
+                                
+                                Divider().background(Theme.border.opacity(0.3))
+                                
                                 // Exercise Vault Button
                                 NavigationLink(destination: ExerciseManagerView()) {
                                     HStack {
@@ -237,7 +255,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

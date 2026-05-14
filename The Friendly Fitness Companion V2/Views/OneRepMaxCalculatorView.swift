@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct OneRepMaxCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
+    @Query private var userSettings: [UserSettings]
     
     @State private var weightString: String = ""
     @State private var repsString: String = ""
@@ -71,7 +73,7 @@ struct OneRepMaxCalculatorView: View {
                                     .font(Theme.Typography.technical(60, weight: .black))
                                     .foregroundColor(Theme.textPrimary)
                                 
-                                Text("lbs")
+                                Text(userSettings.first?.weightUnit ?? "lb")
                                     .font(.title2.bold())
                                     .foregroundColor(Theme.textSecondary)
                             }
@@ -96,7 +98,7 @@ struct OneRepMaxCalculatorView: View {
                                             
                                             Spacer()
                                             
-                                            Text("\(Int(estimated1RM * pct)) lbs")
+                                            Text("\(Int(estimated1RM * pct)) \(userSettings.first?.weightUnit ?? "lb")")
                                                 .font(.headline)
                                                 .foregroundColor(pct == 1.0 ? Theme.warningOrange : Theme.textSecondary)
                                         }
@@ -137,5 +139,14 @@ struct OneRepMaxCalculatorView: View {
 }
 
 #Preview {
-    OneRepMaxCalculatorView()
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
+    let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+    let container = try? ModelContainer(for: schema, configurations: [config])
+    
+    guard let safeContainer = container else {
+        return AnyView(Text("Preview failed to load container"))
+    }
+    
+    return AnyView(OneRepMaxCalculatorView()
+        .modelContainer(safeContainer))
 }

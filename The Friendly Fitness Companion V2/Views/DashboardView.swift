@@ -4,6 +4,7 @@ import Charts
 
 struct DashboardView: View {
     @Query(sort: \WorkoutSession.timestamp, order: .reverse) private var recentSessions: [WorkoutSession]
+    @Query private var userSettings: [UserSettings]
     @State private var isShowingFastingToolbox = false
     
     // Calculates the number of days since a specific muscle group was trained
@@ -15,7 +16,8 @@ struct DashboardView: View {
             let daysAgo = Calendar.current.dateComponents([.day], from: session.timestamp, to: now).day ?? 0
             
             for workoutEx in session.exercises {
-                if let muscle = workoutEx.exerciseRef?.targetMuscle {
+                let muscle = workoutEx.loggedTargetMuscle.isEmpty ? (workoutEx.exerciseRef?.targetMuscle ?? "UNKNOWN") : workoutEx.loggedTargetMuscle
+                if muscle != "UNKNOWN" {
                     // Only keep the most recent (smallest daysAgo) because sessions are sorted descending
                     if map[muscle] == nil {
                         map[muscle] = daysAgo
@@ -46,7 +48,8 @@ struct DashboardView: View {
         
         for session in recentSessions where session.timestamp >= oneWeekAgo {
             for wex in session.exercises {
-                if let muscle = wex.exerciseRef?.targetMuscle {
+                let muscle = wex.loggedTargetMuscle.isEmpty ? (wex.exerciseRef?.targetMuscle ?? "UNKNOWN") : wex.loggedTargetMuscle
+                if muscle != "UNKNOWN" {
                     let volume = wex.sets.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
                     map[muscle, default: 0.0] += volume
                 }
@@ -91,47 +94,7 @@ struct DashboardView: View {
                                 .padding(.horizontal)
                         }
                         
-                        // Volume Analytics Chart
-                        if !volumeMap.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("7-DAY MUSCLE VOLUME (LBS)")
-                                    .font(Theme.Typography.technical(14, weight: .bold))
-                                    .foregroundColor(Theme.textSecondary)
-                                    .tracking(2)
-                                    .padding(.horizontal)
-                                
-                                let totalVolume = volumeMap.reduce(0) { $0 + $1.volume }
-                                Chart {
-                                    ForEach(volumeMap, id: \.muscle) { data in
-                                        let percentage = totalVolume > 0 ? (data.volume / totalVolume) * 100 : 0
-                                        
-                                        BarMark(
-                                            x: .value("Muscle", data.muscle.uppercased()),
-                                            y: .value("Volume", data.volume),
-                                            width: .fixed(4)
-                                        )
-                                        .foregroundStyle(Theme.accent)
-                                        .annotation(position: .top, alignment: .center) {
-                                            Text("\(Int(percentage))%")
-                                                .font(Theme.Typography.technical(16, weight: .black))
-                                                .foregroundColor(Theme.textPrimary)
-                                        }
-                                    }
-                                }
-                                .frame(height: 220)
-                                .padding()
-                                .padding(.top, 20)
-                                .background(Theme.surface)
-                                .cornerRadius(16)
-                                .padding(.horizontal)
-                                .chartXAxis {
-                                    AxisMarks { _ in
-                                        AxisValueLabel().foregroundStyle(Theme.textPrimary).font(Theme.Typography.technical(10, weight: .bold))
-                                    }
-                                }
-                                .chartYAxis(.hidden)
-                            }
-                        }
+                        // Volume Analytics Chart Removed
                         
                         // Intensity Trends Graph
                         if weeklySessionsSorted.count > 1 {
@@ -276,7 +239,7 @@ struct StatCard: View {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

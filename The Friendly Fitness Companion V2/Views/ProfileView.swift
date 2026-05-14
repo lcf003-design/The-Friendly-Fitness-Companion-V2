@@ -67,7 +67,7 @@ struct ProfileView: View {
                                 .padding(.horizontal)
                             
                             LazyVGrid(columns: columns, spacing: 16) {
-                                BiometricCard(title: "BODY WEIGHT", value: String(format: "%.1f", settings?.bodyWeight ?? 0), unit: "lbs", isEditing: isEditing, text: $draftWeight, keyboardType: .decimalPad)
+                                BiometricCard(title: "BODY WEIGHT", value: String(format: "%.1f", settings?.bodyWeight ?? 0), unit: settings?.weightUnit ?? "lb", isEditing: isEditing, text: $draftWeight, keyboardType: .decimalPad)
                                 
                                 BiometricCard(title: "BODY FAT", value: String(format: "%.1f", settings?.bodyFatPercentage ?? 0), unit: "%", isEditing: isEditing, text: $draftBodyFat, keyboardType: .decimalPad)
                                 
