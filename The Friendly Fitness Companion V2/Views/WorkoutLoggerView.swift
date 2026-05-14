@@ -108,6 +108,7 @@ struct WorkoutLoggerView: View {
             .onDelete(perform: deleteExercise)
         }
         .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
     }
     
     @ViewBuilder

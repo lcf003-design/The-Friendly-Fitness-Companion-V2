@@ -175,6 +175,7 @@ struct ActiveExerciseView: View {
                     }
                     .padding(.horizontal)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 
                 // Rest Timer HUD
                 if isTimerRunning {

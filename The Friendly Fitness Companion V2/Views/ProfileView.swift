@@ -3,6 +3,7 @@ import SwiftData
 
 struct ProfileView: View {
     @Query private var settingsQuery: [UserSettings]
+    @Query private var allSessions: [WorkoutSession]
     @Environment(\.modelContext) private var modelContext
     
     // State for editing
@@ -22,43 +23,130 @@ struct ProfileView: View {
         settingsQuery.first
     }
     
+    private var totalWorkouts: Int {
+        allSessions.count
+    }
+    
+    private var totalVolume: Double {
+        var total = 0.0
+        for session in allSessions {
+            for exercise in session.exercises {
+                for set in exercise.sets {
+                    total += set.weight * Double(set.reps)
+                }
+            }
+        }
+        return total
+    }
+    
+    private var powerliftingTotal: Double {
+        var maxBench = 0.0
+        var maxSquat = 0.0
+        var maxDeadlift = 0.0
+        
+        for session in allSessions {
+            for exercise in session.exercises {
+                let name = exercise.loggedName.isEmpty ? (exercise.exerciseRef?.name.lowercased() ?? "") : exercise.loggedName.lowercased()
+                
+                var maxForExercise = 0.0
+                for set in exercise.sets {
+                    let estimated1RM = set.weight * (1.0 + (Double(set.reps) / 30.0))
+                    if estimated1RM > maxForExercise {
+                        maxForExercise = estimated1RM
+                    }
+                }
+                
+                if name.contains("bench press") || name == "bench" {
+                    maxBench = max(maxBench, maxForExercise)
+                } else if name.contains("squat") {
+                    maxSquat = max(maxSquat, maxForExercise)
+                } else if name.contains("deadlift") {
+                    maxDeadlift = max(maxDeadlift, maxForExercise)
+                }
+            }
+        }
+        
+        return maxBench + maxSquat + maxDeadlift
+    }
+    
+    // Compute a deterministic ID based on the user's name
+    private var memberID: String {
+        let name = settings?.userName ?? "A"
+        let hash = abs(name.hashValue)
+        let prefix = String(hash).prefix(6)
+        return String(prefix.padding(toLength: 6, withPad: "0", startingAt: 0))
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.midnightMatte.ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(spacing: 30) {
-                        // Avatar Header
-                        VStack(spacing: 16) {
-                            Circle()
-                                .fill(Theme.surface)
-                                .frame(width: 100, height: 100)
-                                .overlay(
-                                    Text(settings?.userName.prefix(1).uppercased() ?? "M")
-                                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                                        .foregroundColor(Theme.textPrimary)
-                                )
-                                .shadow(color: Theme.accent.opacity(0.2), radius: 10, x: 0, y: 5)
-                            
-                            if isEditing {
+                    VStack(spacing: 32) {
+                        
+                        // 1. Interactive Membership Card
+                        if isEditing {
+                            VStack {
+                                Text("Edit Athlete Name")
+                                    .font(Theme.Typography.technical(12, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
                                 TextField("Enter Name", text: $draftName)
                                     .font(.title2.bold())
                                     .foregroundColor(Theme.textPrimary)
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal)
-                                    .padding(.vertical, 8)
+                                    .padding(.vertical, 16)
                                     .background(Theme.surface)
-                                    .cornerRadius(8)
-                            } else {
-                                Text(settings?.userName ?? "Athlete")
-                                    .font(.title.bold())
-                                    .foregroundColor(Theme.textPrimary)
+                                    .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            .padding(.top, 20)
+                        } else {
+                            MembershipCardView(name: settings?.userName ?? "Athlete", memberID: memberID)
+                                .padding(.horizontal)
+                                .padding(.top, 20)
+                        }
+                        
+                        // 2. Trophy Cabinet
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("LIFETIME ACHIEVEMENTS")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .tracking(2)
+                                .padding(.horizontal)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 16) {
+                                    Spacer().frame(width: 4)
+                                    
+                                    TrophyCard(
+                                        title: "LIFETIME SESSIONS",
+                                        value: "\(totalWorkouts)",
+                                        icon: "flame.fill",
+                                        color: Theme.warningOrange
+                                    )
+                                    
+                                    TrophyCard(
+                                        title: "TOTAL TONNAGE",
+                                        value: totalVolume > 1000 ? String(format: "%.1fk", totalVolume / 1000) : String(format: "%.0f", totalVolume),
+                                        icon: "scalemass.fill",
+                                        color: Theme.accent
+                                    )
+                                    
+                                    TrophyCard(
+                                        title: "POWER TOTAL (EST)",
+                                        value: String(format: "%.0f", powerliftingTotal),
+                                        icon: "bolt.shield.fill",
+                                        color: Theme.apexGreen
+                                    )
+                                    
+                                    Spacer().frame(width: 4)
+                                }
                             }
                         }
-                        .padding(.top, 20)
                         
-                        // Scouting Report Grid
+                        // 3. Scouting Report Grid
                         VStack(alignment: .leading, spacing: 12) {
                             Text("SCOUTING REPORT")
                                 .font(Theme.Typography.technical(12, weight: .bold))
@@ -92,14 +180,26 @@ struct ProfileView: View {
                                         }
                                     }
                                     .pickerStyle(.segmented)
+                                    .background(Theme.surface)
+                                    .cornerRadius(8)
                                 } else {
-                                    Text(settings?.currentPhase ?? "Hypertrophy")
-                                        .font(.headline)
-                                        .foregroundColor(Theme.accent)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding()
-                                        .background(Theme.surface)
-                                        .cornerRadius(12)
+                                    HStack {
+                                        Image(systemName: phaseIcon(for: settings?.currentPhase ?? "Hypertrophy"))
+                                            .foregroundColor(Theme.accent)
+                                        Text(settings?.currentPhase ?? "Hypertrophy")
+                                            .font(.headline)
+                                            .foregroundColor(Theme.textPrimary)
+                                        Spacer()
+                                    }
+                                    .padding()
+                                    .background(
+                                        LinearGradient(colors: [Theme.surface, Theme.surface.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    )
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Theme.border.opacity(0.3), lineWidth: 1)
+                                    )
                                 }
                             }
                             .padding(.horizontal)
@@ -130,9 +230,11 @@ struct ProfileView: View {
                         
                         Spacer()
                     }
+                    .padding(.bottom, 40)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle("Me")
+            .navigationTitle("Command Center")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
@@ -155,6 +257,16 @@ struct ProfileView: View {
         }
     }
     
+    private func phaseIcon(for phase: String) -> String {
+        switch phase {
+        case "Hypertrophy": return "figure.strengthtraining.traditional"
+        case "Strength": return "dumbbell.fill"
+        case "Cutting": return "flame.fill"
+        case "Recomp": return "arrow.triangle.2.circlepath"
+        default: return "star.fill"
+        }
+    }
+    
     private func startEditing() {
         draftName = settings?.userName ?? ""
         draftWeight = String(settings?.bodyWeight ?? 0)
@@ -162,7 +274,9 @@ struct ProfileView: View {
         draftHeight = String(settings?.heightInches ?? 0)
         draftAge = String(settings?.trainingAgeYears ?? 0)
         draftPhase = settings?.currentPhase ?? "Hypertrophy"
-        isEditing = true
+        withAnimation {
+            isEditing = true
+        }
     }
     
     private func saveProfile() {
@@ -175,7 +289,164 @@ struct ProfileView: View {
             currentSettings.currentPhase = draftPhase
         }
         try? modelContext.save()
-        isEditing = false
+        withAnimation {
+            isEditing = false
+        }
+    }
+}
+
+// MARK: - Subcomponents
+
+struct MembershipCardView: View {
+    let name: String
+    let memberID: String
+    
+    @State private var offset: CGSize = .zero
+    @State private var isDragging = false
+    
+    var body: some View {
+        ZStack {
+            // Glassmorphic background
+            RoundedRectangle(cornerRadius: 24)
+                .fill(
+                    LinearGradient(
+                        colors: [Theme.surface, Theme.midnightMatte],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: Theme.accent.opacity(isDragging ? 0.4 : 0.1), radius: isDragging ? 20 : 10, x: 0, y: isDragging ? 10 : 5)
+            
+            // Border glow
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(
+                    LinearGradient(
+                        colors: [Theme.accent.opacity(0.8), Theme.border.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+            
+            // Content
+            VStack(alignment: .leading) {
+                HStack {
+                    Text("ORIGIN ATHLETE")
+                        .font(Theme.Typography.technical(12, weight: .black))
+                        .foregroundColor(Theme.textSecondary)
+                        .tracking(3)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "aqi.high")
+                        .font(.title3)
+                        .foregroundColor(Theme.accent)
+                }
+                
+                Spacer()
+                
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(name.isEmpty ? "ATHLETE" : name.uppercased())
+                            .font(.system(size: 28, weight: .black, design: .rounded))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                        
+                        Text("ID: FF-\(memberID)")
+                            .font(Theme.Typography.technical(10, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Chip / NFC indicator
+                    Image(systemName: "wave.3.right")
+                        .font(.title2)
+                        .foregroundColor(Theme.border.opacity(0.6))
+                        .rotationEffect(.degrees(-90))
+                }
+            }
+            .padding(24)
+            
+            // Dynamic Glare effect based on drag
+            GeometryReader { geo in
+                LinearGradient(
+                    colors: [.white.opacity(0.0), .white.opacity(isDragging ? 0.15 : 0.05), .white.opacity(0.0)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .offset(x: isDragging ? offset.width : -geo.size.width/2, y: isDragging ? offset.height : -geo.size.height/2)
+                .mask(RoundedRectangle(cornerRadius: 24))
+            }
+        }
+        .frame(height: 200)
+        .rotation3DEffect(
+            .degrees(isDragging ? Double(-offset.height / 15) : 0),
+            axis: (x: 1.0, y: 0.0, z: 0.0)
+        )
+        .rotation3DEffect(
+            .degrees(isDragging ? Double(offset.width / 15) : 0),
+            axis: (x: 0.0, y: 1.0, z: 0.0)
+        )
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.6)) {
+                        isDragging = true
+                        offset = value.translation
+                    }
+                }
+                .onEnded { _ in
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.5)) {
+                        isDragging = false
+                        offset = .zero
+                    }
+                }
+        )
+    }
+}
+
+struct TrophyCard: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(color)
+                .padding(12)
+                .background(
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .shadow(color: color.opacity(0.3), radius: 5, x: 0, y: 2)
+                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(value)
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
+                
+                Text(title)
+                    .font(Theme.Typography.technical(10, weight: .bold))
+                    .foregroundColor(Theme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .frame(width: 140, alignment: .leading)
+        .padding()
+        .background(
+            LinearGradient(colors: [Theme.surface, Theme.surface.opacity(0.5)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(color.opacity(0.2), lineWidth: 1)
+        )
     }
 }
 
@@ -207,7 +478,7 @@ struct BiometricCard: View {
                 HStack(alignment: .lastTextBaseline, spacing: 4) {
                     Text(value)
                         .font(.system(size: 28, weight: .black, design: .rounded))
-                        .foregroundColor(Theme.textPrimary)
+                        .foregroundColor(.white)
                     Text(unit)
                         .font(.caption.bold())
                         .foregroundColor(Theme.accent)
@@ -216,11 +487,13 @@ struct BiometricCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Theme.surface)
+        .background(
+            LinearGradient(colors: [Theme.surface, Theme.surface.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Theme.border, lineWidth: 1)
+                .stroke(Theme.border.opacity(0.3), lineWidth: 1)
         )
     }
 }

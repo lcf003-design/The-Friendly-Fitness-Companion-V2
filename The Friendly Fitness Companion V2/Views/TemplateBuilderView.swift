@@ -75,6 +75,7 @@ struct TemplateBuilderView: View {
                             }
                             .listStyle(.plain)
                             .scrollContentBackground(.hidden)
+                            .scrollDismissesKeyboard(.interactively)
                             .cornerRadius(12)
                             .padding(.horizontal)
                         }

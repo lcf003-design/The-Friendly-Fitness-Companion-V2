@@ -67,6 +67,7 @@ struct ExerciseSelectionView: View {
                         }
                     }
                     .scrollContentBackground(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
                 }
             }
             .navigationTitle("Select Exercise")
