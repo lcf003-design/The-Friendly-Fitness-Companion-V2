@@ -247,32 +247,13 @@ struct FastingView: View {
                             HapticManager.shared.playLightImpact()
                             selectedPhase = phase
                         }) {
-                            ZStack(alignment: .topLeading) {
-                                // 1. Living Fluid Background
-                                AnimatedFluidBackground(colors: phase.gradientColors)
-                                
-                                // 2. Massive Watermark Icon (Breathing)
-                                VStack {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack {
+                                    Image(systemName: phase.icon)
+                                        .font(.title2)
+                                        .foregroundColor(isActivePhase ? .white : phase.color)
+                                        .symbolEffect(.pulse, options: .repeating, isActive: isActivePhase)
                                     Spacer()
-                                    HStack {
-                                        Spacer()
-                                        Image(systemName: phase.icon)
-                                            .font(.system(size: 140))
-                                            .foregroundColor(isActivePhase ? .white.opacity(0.15) : .black.opacity(0.1))
-                                            .rotationEffect(.degrees(15))
-                                            .symbolEffect(.pulse, options: .repeating, isActive: isActivePhase)
-                                            .offset(x: 30, y: 30)
-                                    }
-                                }
-                                
-                                // 3. Content with Glassmorphism
-                                VStack(alignment: .leading, spacing: 12) {
-                                    HStack {
-                                        Image(systemName: phase.icon)
-                                            .font(.title2)
-                                            .foregroundColor(isActivePhase ? .white : phase.color)
-                                            .symbolEffect(.pulse, options: .repeating, isActive: isActivePhase)
-                                        Spacer()
                                         HStack(spacing: 6) {
                                             if isActivePhase {
                                                 Circle()
@@ -305,10 +286,29 @@ struct FastingView: View {
                                         .foregroundColor(.white.opacity(0.85))
                                         .fixedSize(horizontal: false, vertical: true)
                                         .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-                                }
-                                .padding()
+                                Spacer(minLength: 0) // Push everything to top
                             }
-                            .frame(width: 240, height: 170)
+                            .padding()
+                            .frame(width: 240, height: 200, alignment: .topLeading)
+                            .background(
+                                ZStack {
+                                    AnimatedFluidBackground(colors: phase.gradientColors)
+                                    
+                                    // Massive Watermark Icon
+                                    VStack {
+                                        Spacer()
+                                        HStack {
+                                            Spacer()
+                                            Image(systemName: phase.icon)
+                                                .font(.system(size: 140))
+                                                .foregroundColor(isActivePhase ? .white.opacity(0.15) : .black.opacity(0.1))
+                                                .rotationEffect(.degrees(15))
+                                                .symbolEffect(.pulse, options: .repeating, isActive: isActivePhase)
+                                                .offset(x: 30, y: 30)
+                                        }
+                                    }
+                                }
+                            )
                             .clipShape(RoundedRectangle(cornerRadius: 24))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 24)
@@ -335,7 +335,7 @@ struct FastingView: View {
                 .padding(.horizontal, 30)
                 .padding(.vertical, 10)
             }
-            .frame(height: 200) // Fixed height prevents scaleEffect from bouncing the entire UI vertically
+            .frame(height: 220) // Fixed height prevents scaleEffect from bouncing the entire UI vertically
             .scrollTargetBehavior(.viewAligned)
         }
     }
@@ -1007,10 +1007,25 @@ struct FastingHistoryCard: View {
             }
             
             // Details
-            VStack(alignment: .leading, spacing: 4) {
-                Text(fast.startTime.formatted(date: .abbreviated, time: .shortened))
-                    .font(Theme.Typography.technical(16, weight: .bold))
-                    .foregroundColor(Theme.textPrimary)
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text("STARTED:")
+                            .foregroundColor(Theme.textSecondary)
+                        Text(fast.startTime.formatted(date: .abbreviated, time: .shortened))
+                            .foregroundColor(Theme.textPrimary)
+                    }
+                    
+                    if let endTime = fast.endTime {
+                        HStack(spacing: 4) {
+                            Text("BROKE:")
+                                .foregroundColor(Theme.textSecondary)
+                            Text(endTime.formatted(date: .abbreviated, time: .shortened))
+                                .foregroundColor(Theme.textPrimary)
+                        }
+                    }
+                }
+                .font(Theme.Typography.technical(12, weight: .bold))
                 
                 HStack(spacing: 4) {
                     Text("TARGET: \(fast.targetHours)H")

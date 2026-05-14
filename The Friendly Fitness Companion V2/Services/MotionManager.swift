@@ -20,8 +20,9 @@ class MotionManager: ObservableObject {
         motionManager.startDeviceMotionUpdates(to: .main) { [weak self] data, error in
             guard let data = data else { return }
             
-            // Smooth the values to prevent jitter
-            withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8)) {
+            // Direct value assignment without withAnimation
+            // Smoothing should be handled by the View via .animation modifier, not here
+            DispatchQueue.main.async {
                 self?.pitch = data.attitude.pitch
                 self?.roll = data.attitude.roll
             }
