@@ -122,18 +122,18 @@ struct FastingView: View {
                 }
                 
                 VStack(spacing: 0) {
-                    Spacer(minLength: 10)
+                    Spacer(minLength: 5)
                     
                     infographicCardsView
                     
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 10)
                     
                     timerHUDView
                     
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 10)
                     
                     controlsView
-                        .padding(.bottom, 20)
+                        .padding(.bottom, 10)
                 }
             }
             .onAppear {
@@ -308,7 +308,7 @@ struct FastingView: View {
                                 }
                                 .padding()
                             }
-                            .frame(width: 240, height: 140)
+                            .frame(width: 240, height: 170)
                             .clipShape(RoundedRectangle(cornerRadius: 24))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 24)
@@ -333,8 +333,9 @@ struct FastingView: View {
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 30)
-                .padding(.vertical, 20)
+                .padding(.vertical, 10)
             }
+            .frame(height: 200) // Fixed height prevents scaleEffect from bouncing the entire UI vertically
             .scrollTargetBehavior(.viewAligned)
         }
     }
@@ -736,25 +737,23 @@ struct AnimatedFluidBackground: View {
                 endPoint: .bottomTrailing
             )
             
-            GeometryReader { geo in
-                ZStack {
-                    Circle()
-                        .fill(colors.last ?? .white)
-                        .frame(width: geo.size.width * 1.2, height: geo.size.width * 1.2)
-                        .blur(radius: geo.size.width * 0.3)
-                        .offset(x: isAnimating ? -geo.size.width * 0.2 : geo.size.width * 0.2,
-                                y: isAnimating ? -geo.size.height * 0.2 : geo.size.height * 0.2)
-                    
-                    Circle()
-                        .fill(colors.first ?? .white)
-                        .frame(width: geo.size.width, height: geo.size.width)
-                        .blur(radius: geo.size.width * 0.25)
-                        .offset(x: isAnimating ? geo.size.width * 0.3 : -geo.size.width * 0.3,
-                                y: isAnimating ? geo.size.height * 0.3 : -geo.size.height * 0.3)
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-                .rotationEffect(.degrees(isAnimating ? 360 : 0))
+            ZStack {
+                Circle()
+                    .fill(colors.last ?? .white)
+                    .frame(width: 280, height: 280)
+                    .blur(radius: 50)
+                    .offset(x: isAnimating ? -40 : 40,
+                            y: isAnimating ? -40 : 40)
+                
+                Circle()
+                    .fill(colors.first ?? .white)
+                    .frame(width: 240, height: 240)
+                    .blur(radius: 60)
+                    .offset(x: isAnimating ? 60 : -60,
+                            y: isAnimating ? 60 : -60)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .rotationEffect(.degrees(isAnimating ? 360 : 0))
         }
         .onAppear {
             withAnimation(.linear(duration: 12).repeatForever(autoreverses: true)) {
@@ -805,20 +804,16 @@ struct LiquidSphereView: View {
     @State private var phase: CGFloat = 0.0
     
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                // The Liquid Wave
-                WaveShape(progress: CGFloat(progress), waveHeight: 8, phase: phase)
+        ZStack(alignment: .bottom) {
+            // The Liquid Wave
+            WaveShape(progress: CGFloat(progress), waveHeight: 8, phase: phase)
                     .fill(
                         LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
                     )
                     // The liquid sloshes physically based on device roll
-                    .rotationEffect(.radians(-motion.roll * 0.8))
-                    // The liquid subtly stretches/squashes based on device pitch for 3D feel
-                    .scaleEffect(x: 1.0, y: 1.0 + CGFloat(abs(motion.pitch)) * 0.1)
-            }
-            .clipShape(Circle())
+                .rotationEffect(.radians(-motion.roll * 0.8))
         }
+        .clipShape(Circle())
         .onAppear {
             withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
                 phase = .pi * 2
