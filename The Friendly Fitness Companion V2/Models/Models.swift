@@ -181,11 +181,13 @@ final class FastingSession {
     var startTime: Date = Date()
     var targetHours: Int = 16
     var isCompleted: Bool = false
+    var endTime: Date? = nil
     
-    init(id: UUID = UUID(), startTime: Date = Date(), targetHours: Int = 16, isCompleted: Bool = false) {
+    init(id: UUID = UUID(), startTime: Date = Date(), targetHours: Int = 16, isCompleted: Bool = false, endTime: Date? = nil) {
         self.id = id
         self.startTime = startTime
         self.targetHours = targetHours
         self.isCompleted = isCompleted
+        self.endTime = endTime
     }
 }

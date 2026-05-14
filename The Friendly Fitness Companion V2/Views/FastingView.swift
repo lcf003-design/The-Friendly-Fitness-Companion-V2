@@ -28,6 +28,12 @@ struct FastingView: View {
     @State private var levelUpPhase: FastingPhase? = nil
     @State private var trackedPhaseTitle: String = ""
     
+    // History State
+    @State private var isShowingHistory: Bool = false
+    
+    // Cooldown State
+    @State private var justFinishedFasting: Bool = false
+    
     // Hold to Break Fast mechanics
     @State private var holdTimer: Timer?
     @State private var holdProgress: CGFloat = 0.0
@@ -194,6 +200,14 @@ struct FastingView: View {
                     }
                     .foregroundColor(Theme.textSecondary)
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        isShowingHistory = true
+                    }) {
+                        Image(systemName: "list.bullet.clipboard")
+                            .foregroundColor(Theme.accent)
+                    }
+                }
             }
             .sheet(item: $selectedPhase) { phase in
                 FastingPhaseDetailView(phase: phase)
@@ -204,6 +218,9 @@ struct FastingView: View {
                 if activeFast != nil {
                     currentTime = time
                 }
+            }
+            .sheet(isPresented: $isShowingHistory) {
+                FastingHistoryView()
             }
             .onAppear {
                 currentTime = Date()
@@ -368,59 +385,47 @@ struct FastingView: View {
                         .font(Theme.Typography.technical(12, weight: .bold))
                         .foregroundColor(.white.opacity(0.8))
                         .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                        
+                    if isHoldingBreak {
+                        Text("HOLDING TO BREAK...")
+                            .font(Theme.Typography.technical(12, weight: .bold))
+                            .foregroundColor(Theme.dangerRed)
+                            .shadow(color: .black, radius: 2, x: 0, y: 1)
+                            .padding(.top, 4)
+                    }
                 } else {
                     Image(systemName: "timer")
                         .font(.system(size: 40))
                         .foregroundColor(Theme.textSecondary)
                         .padding(.bottom, 4)
                     
-                    Text("READY")
-                        .font(.system(size: 36, weight: .black, design: .rounded))
+                    Text("TAP TO START")
+                        .font(.system(size: 28, weight: .black, design: .rounded))
                         .foregroundColor(Theme.textPrimary)
                     
-                    Text("SELECT PROTOCOL")
+                    Text("READY")
                         .font(Theme.Typography.technical(12, weight: .bold))
-                        .foregroundColor(Theme.textSecondary)
+                        .foregroundColor(Theme.accent)
                 }
             }
         }
-    }
-    
-    @ViewBuilder
-    private var controlsView: some View {
-        if activeFast != nil {
-            ZStack(alignment: .leading) {
-                // Background
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Theme.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Theme.dangerRed.opacity(0.5), lineWidth: 1)
-                    )
-                
-                // Fill progress
-                GeometryReader { geo in
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Theme.dangerRed)
-                        .frame(width: geo.size.width * holdProgress)
+        .overlay(
+            Group {
+                if activeFast != nil && holdProgress > 0 {
+                    Circle()
+                        .trim(from: 0, to: holdProgress)
+                        .stroke(Theme.dangerRed, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                        .frame(width: 240, height: 240)
+                        .rotationEffect(.degrees(-90))
                         .animation(.linear(duration: isHoldingBreak ? 2.0 : 0.2), value: holdProgress)
-                }
-                
-                // Text Overlay
-                HStack {
-                    Spacer()
-                    Text(isHoldingBreak ? "HOLDING..." : "HOLD TO BREAK FAST")
-                        .font(Theme.Typography.technical(16, weight: .bold))
-                        .foregroundColor(isHoldingBreak ? .white : Theme.dangerRed)
-                        .animation(.none, value: isHoldingBreak)
-                    Spacer()
+                        .shadow(color: Theme.dangerRed, radius: 10)
                 }
             }
-            .frame(height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
+        )
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if activeFast != nil {
                         if !isHoldingBreak {
                             isHoldingBreak = true
                             HapticManager.shared.playLightImpact()
@@ -428,14 +433,24 @@ struct FastingView: View {
                                 holdProgress = 1.0
                             }
                             holdTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
-                                HapticManager.shared.playPR() // Big success haptic
+                                HapticManager.shared.playPR()
+                                justFinishedFasting = true
                                 endFast()
                                 holdProgress = 0.0
                                 isHoldingBreak = false
                             }
                         }
                     }
-                    .onEnded { _ in
+                }
+                .onEnded { _ in
+                    if justFinishedFasting {
+                        justFinishedFasting = false
+                        return
+                    }
+                    if activeFast == nil {
+                        HapticManager.shared.playSuccess()
+                        startFast(hours: selectedProtocolHours)
+                    } else {
                         if isHoldingBreak {
                             holdTimer?.invalidate()
                             holdTimer = nil
@@ -445,10 +460,13 @@ struct FastingView: View {
                             isHoldingBreak = false
                         }
                     }
-            )
-            .padding(.horizontal)
-        } else {
-            VStack(spacing: 20) {
+                }
+        )
+    }
+    
+    @ViewBuilder
+    private var controlsView: some View {
+        VStack(spacing: 20) {
                 // Mechanical Vault Selector
                 VStack(spacing: 12) {
                     Text("SET FASTING PROTOCOL")
@@ -491,20 +509,10 @@ struct FastingView: View {
                         HapticManager.shared.playSelection()
                     }
                 }
-                
-                // Start Button
-                Button(action: { startFast(hours: selectedProtocolHours) }) {
-                    Text("INITIATE PROTOCOL")
-                        .font(Theme.Typography.technical(16, weight: .bold))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(Theme.accent)
-                        .cornerRadius(16)
-                }
-                .padding(.horizontal)
             }
-        }
+        .opacity(activeFast == nil ? 1.0 : 0.0)
+        .disabled(activeFast != nil)
+        .animation(.easeInOut, value: activeFast != nil)
     }
     
     private func startFast(hours: Int) {
@@ -517,6 +525,7 @@ struct FastingView: View {
     private func endFast() {
         if let fast = activeFast {
             fast.isCompleted = true
+            fast.endTime = Date()
             try? modelContext.save()
         }
     }
@@ -815,5 +824,225 @@ struct LiquidSphereView: View {
                 phase = .pi * 2
             }
         }
+    }
+}
+
+// MARK: - Fasting History
+struct FastingHistoryView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    
+    // Sort completed fasts by most recent first
+    @Query(filter: #Predicate<FastingSession> { $0.isCompleted }, sort: \FastingSession.startTime, order: .reverse)
+    private var fasts: [FastingSession]
+    
+    // Derived Statistics
+    private var totalFasts: Int {
+        fasts.count
+    }
+    
+    private var averageDuration: Double {
+        guard !fasts.isEmpty else { return 0 }
+        let totalDuration = fasts.reduce(0) { sum, fast in
+            let end = fast.endTime ?? fast.startTime // Fallback if old data doesn't have endTime
+            return sum + end.timeIntervalSince(fast.startTime)
+        }
+        return (totalDuration / Double(fasts.count)) / 3600.0
+    }
+    
+    private var longestFast: Double {
+        fasts.map { fast in
+            let end = fast.endTime ?? fast.startTime
+            return end.timeIntervalSince(fast.startTime)
+        }.max() ?? 0.0
+    }
+    
+    private var currentStreak: Int {
+        guard !fasts.isEmpty else { return 0 }
+        
+        let calendar = Calendar.current
+        var streak = 0
+        let currentDate = calendar.startOfDay(for: Date())
+        
+        // Find fasts for each day going backwards
+        for i in 0..<365 { // Cap at a year to avoid infinite loops if data is weird
+            let targetDate = calendar.date(byAdding: .day, value: -i, to: currentDate)!
+            
+            let hasFastOnDay = fasts.contains { fast in
+                calendar.isDate(fast.startTime, inSameDayAs: targetDate) ||
+                calendar.isDate(fast.endTime ?? fast.startTime, inSameDayAs: targetDate)
+            }
+            
+            if hasFastOnDay {
+                streak += 1
+            } else {
+                // If it's today and they haven't fasted yet, don't break the streak immediately
+                if i == 0 { continue }
+                break
+            }
+        }
+        return streak
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.midnightMatte.ignoresSafeArea()
+                
+                if fasts.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "clock.badge.xmark")
+                            .font(.system(size: 60))
+                            .foregroundColor(Theme.border)
+                        Text("No Fasting History")
+                            .font(Theme.Typography.technical(20, weight: .bold))
+                            .foregroundColor(Theme.textPrimary)
+                        Text("Complete a fast to start building your streak.")
+                            .font(Theme.Typography.technical(14))
+                            .foregroundColor(Theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                } else {
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            // Statistics Header
+                            statisticsHeader
+                                .padding(.top, 20)
+                            
+                            // History Ledger
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("FASTING LEDGER")
+                                    .font(Theme.Typography.technical(12, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                                    .tracking(2)
+                                    .padding(.horizontal)
+                                
+                                LazyVStack(spacing: 12) {
+                                    ForEach(fasts) { fast in
+                                        FastingHistoryCard(fast: fast)
+                                            .padding(.horizontal)
+                                            // Swipe to delete implemented via context menu since LazyVStack doesn't natively support swipe actions like List does without heavy wrappers
+                                            .contextMenu {
+                                                Button(role: .destructive) {
+                                                    deleteFast(fast)
+                                                } label: {
+                                                    Label("Delete Session", systemImage: "trash")
+                                                }
+                                            }
+                                    }
+                                }
+                            }
+                            
+                            Spacer()
+                        }
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                }
+            }
+            .navigationTitle("Fasting History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(Theme.Typography.technical(16, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var statisticsHeader: some View {
+        VStack(spacing: 16) {
+            // Top Row
+            HStack(spacing: 16) {
+                StatCard(title: "TOTAL FASTS", value: "\(totalFasts)", icon: "checkmark.circle.fill", color: Theme.accent)
+                StatCard(title: "STREAK", value: "\(currentStreak) DAYS", icon: "flame.fill", color: Theme.warningOrange)
+            }
+            .padding(.horizontal)
+            
+            // Bottom Row
+            HStack(spacing: 16) {
+                let avgStr = String(format: "%.1f", averageDuration)
+                StatCard(title: "AVG DURATION", value: "\(avgStr)H", icon: "chart.bar.fill", color: Theme.textPrimary)
+                
+                let longestStr = String(format: "%.1f", (longestFast / 3600.0))
+                StatCard(title: "LONGEST FAST", value: "\(longestStr)H", icon: "crown.fill", color: Theme.dangerRed)
+            }
+            .padding(.horizontal)
+        }
+    }
+    
+    private func deleteFast(_ fast: FastingSession) {
+        modelContext.delete(fast)
+        try? modelContext.save()
+        HapticManager.shared.playLightImpact()
+    }
+}
+
+struct FastingHistoryCard: View {
+    let fast: FastingSession
+    
+    var actualDurationHours: Double {
+        let end = fast.endTime ?? fast.startTime
+        return end.timeIntervalSince(fast.startTime) / 3600.0
+    }
+    
+    var didMeetTarget: Bool {
+        actualDurationHours >= Double(fast.targetHours)
+    }
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Status Icon
+            ZStack {
+                Circle()
+                    .fill(didMeetTarget ? Theme.accent.opacity(0.2) : Theme.warningOrange.opacity(0.2))
+                    .frame(width: 48, height: 48)
+                
+                Image(systemName: didMeetTarget ? "checkmark" : "xmark")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(didMeetTarget ? Theme.accent : Theme.warningOrange)
+            }
+            
+            // Details
+            VStack(alignment: .leading, spacing: 4) {
+                Text(fast.startTime.formatted(date: .abbreviated, time: .shortened))
+                    .font(Theme.Typography.technical(16, weight: .bold))
+                    .foregroundColor(Theme.textPrimary)
+                
+                HStack(spacing: 4) {
+                    Text("TARGET: \(fast.targetHours)H")
+                    Text("•")
+                    Text(didMeetTarget ? "ACHIEVED" : "BROKEN EARLY")
+                        .foregroundColor(didMeetTarget ? Theme.accent : Theme.warningOrange)
+                }
+                .font(Theme.Typography.technical(12))
+                .foregroundColor(Theme.textSecondary)
+            }
+            
+            Spacer()
+            
+            // Actual Duration
+            VStack(alignment: .trailing, spacing: 4) {
+                let durationStr = String(format: "%.1f", actualDurationHours)
+                Text("\(durationStr)H")
+                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .foregroundColor(.white)
+            }
+        }
+        .padding()
+        .background(Theme.surface)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Theme.border, lineWidth: 1)
+        )
     }
 }
