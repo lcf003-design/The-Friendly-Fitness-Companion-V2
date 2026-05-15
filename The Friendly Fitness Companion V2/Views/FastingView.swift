@@ -133,10 +133,8 @@ struct FastingView: View {
             .sheet(isPresented: $isShowingHistory) {
                 FastingHistoryView()
             }
-            .sheet(item: $selectedPhase) { phase in
+            .fullScreenCover(item: $selectedPhase) { phase in
                 FastingPhaseDetailView(phase: phase)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
             }
         }
     }
