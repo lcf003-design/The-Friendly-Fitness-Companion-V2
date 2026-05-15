@@ -18,18 +18,9 @@ struct FastingView: View {
     @Environment(\.modelContext) private var modelContext
     @Binding var isPresented: Bool
     @Query private var fasts: [FastingSession]
-    
-    @State private var currentPhaseData: FastingPhase = FastingPhase(title: "", duration: "", icon: "", description: "", shortDescription: "", color: .clear, gradientColors: [.clear, .clear], biologicalEffects: [])
-    @State private var selectedProtocolHours: Int = 16
     @State private var selectedPhase: FastingPhase?
-    
-    // Level Up Gamification State
-    @State private var showLevelUp: Bool = false
-    @State private var levelUpPhase: FastingPhase? = nil
-    @State private var trackedPhaseTitle: String = ""
-    
-    // History State
     @State private var isShowingHistory: Bool = false
+    @State private var selectedProtocolHours: Int = 16
     
     // Cooldown State
     @State private var justFinishedFasting: Bool = false
@@ -73,16 +64,13 @@ struct FastingView: View {
         fasts.first { !$0.isCompleted }
     }
     
-    private func recalculateInitialPhase() {
-        guard let fast = activeFast else {
-            currentPhaseData = phases[0]
-            return
-        }
-        let elapsedHours = Date().timeIntervalSince(fast.startTime) / 3600.0
-        if elapsedHours < 4 { currentPhaseData = phases[0] }
-        else if elapsedHours < 12 { currentPhaseData = phases[1] }
-        else if elapsedHours < 16 { currentPhaseData = phases[2] }
-        else { currentPhaseData = phases[3] }
+    private func staticPhase(for fast: FastingSession?) -> FastingPhase {
+        guard let f = fast else { return phases[0] }
+        let hours = Date().timeIntervalSince(f.startTime) / 3600.0
+        if hours < 4 { return phases[0] }
+        if hours < 12 { return phases[1] }
+        if hours < 16 { return phases[2] }
+        return phases[3]
     }
     
     var body: some View {
@@ -90,93 +78,20 @@ struct FastingView: View {
             ZStack {
                 Theme.midnightMatte.ignoresSafeArea()
                 
-                // Ambient Background Auras
-                if activeFast != nil {
-                    ZStack {
-                        Circle()
-                            .fill(currentPhaseData.gradientColors[0].opacity(0.4))
-                            .frame(width: 400, height: 400)
-                            .blur(radius: 120)
-                            .offset(x: -100, y: -200)
-                        
-                        Circle()
-                            .fill(currentPhaseData.gradientColors[1].opacity(0.3))
-                            .frame(width: 300, height: 300)
-                            .blur(radius: 100)
-                            .offset(x: 150, y: 100)
-                    }
-                    .ignoresSafeArea()
-                    .animation(.easeInOut(duration: 2.0), value: currentPhaseData.id)
-                }
+                // Auras handled in IsolatedTimerHUD
                 
-                VStack(spacing: 0) {
-                    Spacer(minLength: 5)
-                    
+                VStack(spacing: 20) {
                     infographicCardsView
-                    
-                    Spacer(minLength: 10)
+                        .frame(height: 220)
                     
                     timerHUDView
-                    
-                    Spacer(minLength: 10)
+                        .frame(height: 350)
                     
                     controlsView
                         .padding(.bottom, 10)
                 }
+                .padding(.top, 20)
             }
-            .onAppear {
-                recalculateInitialPhase()
-                trackedPhaseTitle = currentPhaseData.title
-            }
-            .onChange(of: currentPhaseData.title) { oldValue, newValue in
-                // Only trigger if we are actively fasting, the title actually changed, and we have an initial tracked title
-                if activeFast != nil && !trackedPhaseTitle.isEmpty && trackedPhaseTitle != newValue {
-                    triggerLevelUp(newPhase: currentPhaseData)
-                }
-                trackedPhaseTitle = newValue
-            }
-            .overlay(
-                Group {
-                    if showLevelUp, let phase = levelUpPhase {
-                        ZStack {
-                            // Full screen color flash
-                            phase.color.opacity(0.9)
-                                .ignoresSafeArea()
-                                .background(.ultraThinMaterial)
-                            
-                            VStack(spacing: 24) {
-                                Image(systemName: phase.icon)
-                                    .font(.system(size: 80))
-                                    .foregroundColor(.white)
-                                    .shadow(color: .white.opacity(0.8), radius: 30, x: 0, y: 0)
-                                    .scaleEffect(showLevelUp ? 1.0 : 0.5)
-                                    .animation(.spring(response: 0.4, dampingFraction: 0.5).delay(0.1), value: showLevelUp)
-                                
-                                VStack(spacing: 8) {
-                                    Text("PHASE UNLOCKED")
-                                        .font(Theme.Typography.technical(16, weight: .black))
-                                        .foregroundColor(.white.opacity(0.8))
-                                        .tracking(4)
-                                    
-                                    Text(phase.title.uppercased())
-                                        .font(.system(size: 36, weight: .black, design: .rounded))
-                                        .foregroundColor(.white)
-                                        .multilineTextAlignment(.center)
-                                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 3)
-                                }
-                                .offset(y: showLevelUp ? 0 : 20)
-                                .opacity(showLevelUp ? 1 : 0)
-                                .animation(.easeOut(duration: 0.4).delay(0.2), value: showLevelUp)
-                            }
-                        }
-                        .onAppear {
-                            HapticManager.shared.playLightImpact()
-                        }
-                        .transition(.opacity)
-                        .zIndex(100)
-                    }
-                }
-            )
             .navigationTitle("The Fasting Toolbox")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -222,7 +137,7 @@ struct FastingView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
                     ForEach(phases, id: \.id) { phase in
-                        let isActivePhase: Bool = (activeFast != nil) && (phase.id == currentPhaseData.id)
+                        let isActivePhase: Bool = (activeFast != nil) && (phase.id == staticPhase(for: activeFast).id)
                         
                         Button(action: {
                             HapticManager.shared.playLightImpact()
@@ -330,11 +245,6 @@ struct FastingView: View {
             fast: activeFast,
             targetHours: selectedProtocolHours,
             phases: phases,
-            onPhaseChange: { newPhase in
-                if currentPhaseData.title != newPhase.title {
-                    currentPhaseData = newPhase
-                }
-            },
             onStartFast: {
                 HapticManager.shared.playSuccess()
                 startFast(hours: selectedProtocolHours)
@@ -425,32 +335,7 @@ struct FastingView: View {
         let seconds = Int(totalSeconds) % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
     }
-    
-    // MARK: - Level Up Logic
-    private func triggerLevelUp(newPhase: FastingPhase) {
-        levelUpPhase = newPhase
-        
-        // Massive Gamified Haptics
-        HapticManager.shared.playSuccess()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            HapticManager.shared.playHeavyImpact()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            HapticManager.shared.playHeavyImpact()
-        }
-        
-        // Show Animation
-        withAnimation(.easeIn(duration: 0.2)) {
-            showLevelUp = true
-        }
-        
-        // Auto-dismiss after 4 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-            withAnimation(.easeOut(duration: 0.8)) {
-                showLevelUp = false
-            }
-        }
-    }
+    // Function moved to IsolatedTimerHUD
 }
 
 #Preview {
@@ -950,7 +835,6 @@ struct IsolatedTimerHUD: View {
     let fast: FastingSession?
     let targetHours: Int
     let phases: [FastingPhase]
-    let onPhaseChange: (FastingPhase) -> Void
     let onStartFast: () -> Void
     let onEndFast: () -> Void
     
@@ -959,6 +843,11 @@ struct IsolatedTimerHUD: View {
     @State private var holdProgress: CGFloat = 0.0
     @State private var isHoldingBreak: Bool = false
     @State private var justFinishedFasting: Bool = false
+    
+    // Level Up State
+    @State private var showLevelUp: Bool = false
+    @State private var levelUpPhase: FastingPhase? = nil
+    @State private var trackedPhaseTitle: String = ""
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
@@ -1027,7 +916,6 @@ struct IsolatedTimerHUD: View {
                         .font(.system(size: 44, weight: .black, design: .monospaced))
                         .foregroundColor(.white)
                         .shadow(color: .black, radius: 6, x: 0, y: 2)
-                        // Explicitly prevent monospace digits from jumping
                         .monospacedDigit()
                     
                     Text("TARGET: \(active.targetHours) HRS")
@@ -1112,10 +1000,6 @@ struct IsolatedTimerHUD: View {
         )
         .onReceive(timer) { input in
             currentTime = input
-            
-            // Notify parent if the phase mathematically changed this tick
-            let latestPhase = currentPhaseData
-            onPhaseChange(latestPhase)
         }
     }
 }
