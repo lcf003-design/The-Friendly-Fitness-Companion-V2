@@ -161,6 +161,23 @@ final class UserSettings {
 }
 
 @Model
+final class BiometricLog {
+    var id: UUID = UUID()
+    var timestamp: Date = Date()
+    var weight: Double?
+    var bodyFatPercentage: Double?
+    var notes: String = ""
+    
+    init(weight: Double? = nil, bodyFat: Double? = nil, notes: String = "") {
+        self.id = UUID()
+        self.timestamp = Date()
+        self.weight = weight
+        self.bodyFatPercentage = bodyFat
+        self.notes = notes
+    }
+}
+
+@Model
 final class WorkoutTemplate {
     var id: UUID = UUID()
     var name: String = ""

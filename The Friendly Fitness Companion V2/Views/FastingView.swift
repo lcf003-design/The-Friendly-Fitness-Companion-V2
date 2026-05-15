@@ -19,7 +19,7 @@ struct FastingView: View {
     @Binding var isPresented: Bool
     @Query private var fasts: [FastingSession]
     
-    @State private var currentTime = Date()
+    @State private var currentPhaseData: FastingPhase = FastingPhase(title: "", duration: "", icon: "", description: "", shortDescription: "", color: .clear, gradientColors: [.clear, .clear], biologicalEffects: [])
     @State private var selectedProtocolHours: Int = 16
     @State private var selectedPhase: FastingPhase?
     
@@ -33,13 +33,6 @@ struct FastingView: View {
     
     // Cooldown State
     @State private var justFinishedFasting: Bool = false
-    
-    // Hold to Break Fast mechanics
-    @State private var holdTimer: Timer?
-    @State private var holdProgress: CGFloat = 0.0
-    @State private var isHoldingBreak: Bool = false
-    
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     let fastingProtocols = [
         ("Circadian Rhythm", 13),
@@ -80,21 +73,16 @@ struct FastingView: View {
         fasts.first { !$0.isCompleted }
     }
     
-    var elapsedHours: Double {
-        guard let fast = activeFast else { return 0 }
-        return currentTime.timeIntervalSince(fast.startTime) / 3600.0
-    }
-    
-    var progress: Double {
-        guard let fast = activeFast else { return 0 }
-        return min(elapsedHours / Double(fast.targetHours), 1.0)
-    }
-    
-    var currentPhaseData: FastingPhase {
-        if elapsedHours < 4 { return phases[0] }
-        if elapsedHours < 12 { return phases[1] }
-        if elapsedHours < 16 { return phases[2] }
-        return phases[3]
+    private func recalculateInitialPhase() {
+        guard let fast = activeFast else {
+            currentPhaseData = phases[0]
+            return
+        }
+        let elapsedHours = Date().timeIntervalSince(fast.startTime) / 3600.0
+        if elapsedHours < 4 { currentPhaseData = phases[0] }
+        else if elapsedHours < 12 { currentPhaseData = phases[1] }
+        else if elapsedHours < 16 { currentPhaseData = phases[2] }
+        else { currentPhaseData = phases[3] }
     }
     
     var body: some View {
@@ -137,6 +125,7 @@ struct FastingView: View {
                 }
             }
             .onAppear {
+                recalculateInitialPhase()
                 trackedPhaseTitle = currentPhaseData.title
             }
             .onChange(of: currentPhaseData.title) { oldValue, newValue in
@@ -214,16 +203,8 @@ struct FastingView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .onReceive(timer) { time in
-                if activeFast != nil {
-                    currentTime = time
-                }
-            }
             .sheet(isPresented: $isShowingHistory) {
                 FastingHistoryView()
-            }
-            .onAppear {
-                currentTime = Date()
             }
         }
     }
@@ -292,6 +273,7 @@ struct FastingView: View {
                             .frame(width: 240, height: 200, alignment: .topLeading)
                             .background(
                                 ZStack {
+                                    Color.clear.background(.ultraThinMaterial) // Glassmorphism
                                     AnimatedFluidBackground(colors: phase.gradientColors)
                                     
                                     // Massive Watermark Icon
@@ -340,128 +322,26 @@ struct FastingView: View {
         }
     }
     
+    // Removed legacy timerHUDView
+    // MARK: - Timer HUD View (Isolated)
+    @ViewBuilder
     private var timerHUDView: some View {
-        ZStack {
-            // Recessed dial track
-            Circle()
-                .stroke(Theme.border.opacity(0.2), lineWidth: 16)
-                .frame(width: 240, height: 240)
-                .shadow(color: .black.opacity(0.8), radius: 10, x: 0, y: 5)
-            
-            let colors = activeFast != nil ? currentPhaseData.gradientColors : [Theme.textSecondary, Theme.border]
-            
-            ZStack {
-                Circle()
-                    .fill(.black.opacity(0.5))
-                
-                LiquidSphereView(progress: activeFast != nil ? progress : 0.0, colors: colors)
-                    .opacity(0.85)
+        IsolatedTimerHUD(
+            fast: activeFast,
+            targetHours: selectedProtocolHours,
+            phases: phases,
+            onPhaseChange: { newPhase in
+                if currentPhaseData.title != newPhase.title {
+                    currentPhaseData = newPhase
+                }
+            },
+            onStartFast: {
+                HapticManager.shared.playSuccess()
+                startFast(hours: selectedProtocolHours)
+            },
+            onEndFast: {
+                endFast()
             }
-            .frame(width: 220, height: 220)
-            .clipShape(Circle())
-            .shadow(color: .black.opacity(0.8), radius: 15, x: 0, y: 10)
-            
-            Circle()
-                .stroke(
-                    LinearGradient(colors: [.white.opacity(0.4), .clear, .black.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: 4
-                )
-                .frame(width: 220, height: 220)
-            
-            VStack(spacing: 8) {
-                if let fast = activeFast {
-                    Image(systemName: currentPhaseData.icon)
-                        .font(.system(size: 32))
-                        .foregroundColor(currentPhaseData.color)
-                        .symbolEffect(.pulse, options: .repeating, isActive: true)
-                        .shadow(color: currentPhaseData.color.opacity(0.6), radius: 10)
-                        .padding(.bottom, 4)
-                    
-                    Text(formatTime(elapsedHours * 3600))
-                        .font(.system(size: 44, weight: .black, design: .monospaced))
-                        .foregroundColor(.white)
-                        .shadow(color: .black, radius: 6, x: 0, y: 2)
-                    
-                    Text("TARGET: \(fast.targetHours) HRS")
-                        .font(Theme.Typography.technical(12, weight: .bold))
-                        .foregroundColor(.white.opacity(0.8))
-                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
-                        
-                    if isHoldingBreak {
-                        Text("HOLDING TO BREAK...")
-                            .font(Theme.Typography.technical(12, weight: .bold))
-                            .foregroundColor(Theme.dangerRed)
-                            .shadow(color: .black, radius: 2, x: 0, y: 1)
-                            .padding(.top, 4)
-                    }
-                } else {
-                    Image(systemName: "timer")
-                        .font(.system(size: 40))
-                        .foregroundColor(Theme.textSecondary)
-                        .padding(.bottom, 4)
-                    
-                    Text("TAP TO START")
-                        .font(.system(size: 28, weight: .black, design: .rounded))
-                        .foregroundColor(Theme.textPrimary)
-                    
-                    Text("READY")
-                        .font(Theme.Typography.technical(12, weight: .bold))
-                        .foregroundColor(Theme.accent)
-                }
-            }
-        }
-        .overlay(
-            Group {
-                if activeFast != nil && holdProgress > 0 {
-                    Circle()
-                        .trim(from: 0, to: holdProgress)
-                        .stroke(Theme.dangerRed, style: StrokeStyle(lineWidth: 16, lineCap: .round))
-                        .frame(width: 240, height: 240)
-                        .rotationEffect(.degrees(-90))
-                        .animation(.linear(duration: isHoldingBreak ? 2.0 : 0.2), value: holdProgress)
-                        .shadow(color: Theme.dangerRed, radius: 10)
-                }
-            }
-        )
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if activeFast != nil {
-                        if !isHoldingBreak {
-                            isHoldingBreak = true
-                            HapticManager.shared.playLightImpact()
-                            withAnimation(.linear(duration: 2.0)) {
-                                holdProgress = 1.0
-                            }
-                            holdTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
-                                HapticManager.shared.playPR()
-                                justFinishedFasting = true
-                                endFast()
-                                holdProgress = 0.0
-                                isHoldingBreak = false
-                            }
-                        }
-                    }
-                }
-                .onEnded { _ in
-                    if justFinishedFasting {
-                        justFinishedFasting = false
-                        return
-                    }
-                    if activeFast == nil {
-                        HapticManager.shared.playSuccess()
-                        startFast(hours: selectedProtocolHours)
-                    } else {
-                        if isHoldingBreak {
-                            holdTimer?.invalidate()
-                            holdTimer = nil
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                holdProgress = 0.0
-                            }
-                            isHoldingBreak = false
-                        }
-                    }
-                }
         )
     }
     
@@ -520,13 +400,21 @@ struct FastingView: View {
         let fast = FastingSession(targetHours: hours)
         modelContext.insert(fast)
         try? modelContext.save()
-        currentTime = Date()
     }
     
     private func endFast() {
         if let fast = activeFast {
             fast.isCompleted = true
             fast.endTime = Date()
+            
+            // Phase 8 Biometric Sync: Log Deep Autophagy Insights
+            let durationHours = Date().timeIntervalSince(fast.startTime) / 3600.0
+            if durationHours >= 16.0 {
+                let note = "DEEP AUTOPHAGY REACHED: \(String(format: "%.1f", durationHours)) HRS. Training intensity parameters may be naturally adjusted for recovery."
+                let bioLog = BiometricLog(notes: note)
+                modelContext.insert(bioLog)
+            }
+            
             try? modelContext.save()
         }
     }
@@ -1054,5 +942,180 @@ struct FastingHistoryCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Theme.border, lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Isolated Timer HUD Component
+struct IsolatedTimerHUD: View {
+    let fast: FastingSession?
+    let targetHours: Int
+    let phases: [FastingPhase]
+    let onPhaseChange: (FastingPhase) -> Void
+    let onStartFast: () -> Void
+    let onEndFast: () -> Void
+    
+    @State private var currentTime = Date()
+    @State private var holdTimer: Timer?
+    @State private var holdProgress: CGFloat = 0.0
+    @State private var isHoldingBreak: Bool = false
+    @State private var justFinishedFasting: Bool = false
+    
+    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    
+    var elapsedHours: Double {
+        guard let fast = fast else { return 0 }
+        return currentTime.timeIntervalSince(fast.startTime) / 3600.0
+    }
+    
+    var progress: Double {
+        guard let fast = fast else { return 0 }
+        return min(elapsedHours / Double(fast.targetHours), 1.0)
+    }
+    
+    var currentPhaseData: FastingPhase {
+        if elapsedHours < 4 { return phases[0] }
+        if elapsedHours < 12 { return phases[1] }
+        if elapsedHours < 16 { return phases[2] }
+        return phases[3]
+    }
+    
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        let hrs = Int(seconds) / 3600
+        let mins = (Int(seconds) % 3600) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%02d:%02d:%02d", hrs, mins, secs)
+    }
+    
+    var body: some View {
+        ZStack {
+            // Autophagy Engine HUD - Dynamic Circular Progress Ring
+            if fast != nil {
+                Circle()
+                    .stroke(Theme.border.opacity(0.3), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: 250, height: 250)
+                
+                Circle()
+                    .trim(from: 0, to: CGFloat(progress))
+                    .stroke(currentPhaseData.gradientColors.last ?? Theme.warningOrange, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .frame(width: 250, height: 250)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 1.0), value: progress)
+                    .shadow(color: currentPhaseData.gradientColors.last?.opacity(0.6) ?? Theme.warningOrange.opacity(0.6), radius: 8)
+            }
+            
+            // Core Sphere
+            ZStack {
+                Circle()
+                    .fill(Theme.midnightMatte)
+                
+                LiquidSphereView(progress: fast != nil ? progress : 0.0, colors: fast != nil ? currentPhaseData.gradientColors : [Theme.surface, Theme.border])
+                    .opacity(0.85)
+            }
+            .frame(width: 220, height: 220)
+            .clipShape(Circle())
+            .shadow(color: .black.opacity(0.8), radius: 15, x: 0, y: 10)
+            
+            VStack(spacing: 8) {
+                if let active = fast {
+                    Text(currentPhaseData.title.uppercased())
+                        .font(Theme.Typography.technical(14, weight: .bold))
+                        .foregroundColor(currentPhaseData.color)
+                        .tracking(2)
+                        .shadow(color: .black, radius: 2, x: 0, y: 1)
+                    
+                    Text(formatTime(elapsedHours * 3600))
+                        .font(.system(size: 44, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                        .shadow(color: .black, radius: 6, x: 0, y: 2)
+                        // Explicitly prevent monospace digits from jumping
+                        .monospacedDigit()
+                    
+                    Text("TARGET: \(active.targetHours) HRS")
+                        .font(Theme.Typography.technical(12, weight: .bold))
+                        .foregroundColor(.white.opacity(0.8))
+                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                        
+                    if isHoldingBreak {
+                        Text("HOLDING TO BREAK...")
+                            .font(Theme.Typography.technical(12, weight: .bold))
+                            .foregroundColor(Theme.dangerRed)
+                            .shadow(color: .black, radius: 2, x: 0, y: 1)
+                            .padding(.top, 4)
+                    }
+                } else {
+                    Image(systemName: "timer")
+                        .font(.system(size: 40))
+                        .foregroundColor(Theme.textSecondary)
+                        .padding(.bottom, 4)
+                    
+                    Text("TAP TO START")
+                        .font(Theme.Typography.technical(28, weight: .black))
+                        .foregroundColor(Theme.textPrimary)
+                    
+                    Text("READY")
+                        .font(Theme.Typography.technical(12, weight: .bold))
+                        .foregroundColor(Theme.accent)
+                }
+            }
+        }
+        .overlay(
+            Group {
+                if fast != nil && holdProgress > 0 {
+                    // Circular fill follows the Progress Ring
+                    Circle()
+                        .trim(from: 0, to: holdProgress)
+                        .stroke(Theme.dangerRed, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                        .frame(width: 250, height: 250) // Match the 250 width of the outer ring
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: isHoldingBreak ? 2.0 : 0.2), value: holdProgress)
+                        .shadow(color: Theme.dangerRed, radius: 10)
+                }
+            }
+        )
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if fast != nil {
+                        if !isHoldingBreak {
+                            isHoldingBreak = true
+                            HapticManager.shared.playLightImpact()
+                            withAnimation(.linear(duration: 2.0)) {
+                                holdProgress = 1.0
+                            }
+                            holdTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in
+                                justFinishedFasting = true
+                                onEndFast()
+                                holdProgress = 0.0
+                                isHoldingBreak = false
+                            }
+                        }
+                    }
+                }
+                .onEnded { _ in
+                    if justFinishedFasting {
+                        justFinishedFasting = false
+                        return
+                    }
+                    if fast == nil {
+                        onStartFast()
+                    } else {
+                        if isHoldingBreak {
+                            isHoldingBreak = false
+                            holdTimer?.invalidate()
+                            holdTimer = nil
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                holdProgress = 0.0
+                            }
+                        }
+                    }
+                }
+        )
+        .onReceive(timer) { input in
+            currentTime = input
+            
+            // Notify parent if the phase mathematically changed this tick
+            let latestPhase = currentPhaseData
+            onPhaseChange(latestPhase)
+        }
     }
 }

@@ -1,9 +1,11 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct ProfileView: View {
     @Query private var settingsQuery: [UserSettings]
     @Query private var allSessions: [WorkoutSession]
+    @Query(sort: \BiometricLog.timestamp) private var biometricLogs: [BiometricLog]
     @Environment(\.modelContext) private var modelContext
     
     // State for editing
@@ -206,6 +208,10 @@ struct ProfileView: View {
                             .padding(.horizontal)
                         }
                         
+                        // 4. Biometric Trajectory Chart
+                        BiometricTrajectoryChart(logs: biometricLogs)
+                            .padding(.horizontal)
+                        
                         // Edit/Save Button
                         Button(action: {
                             if isEditing {
@@ -291,6 +297,10 @@ struct ProfileView: View {
             if let height = Int(draftHeight) { currentSettings.heightInches = height }
             if let age = Int(draftAge) { currentSettings.trainingAgeYears = age }
             currentSettings.currentPhase = draftPhase
+            
+            // Auto-Logging Integration
+            let log = BiometricLog(weight: Double(draftWeight), bodyFat: Double(draftBodyFat), notes: "Profile Edit")
+            modelContext.insert(log)
         }
         try? modelContext.save()
         withAnimation {
@@ -502,7 +512,161 @@ struct BiometricCard: View {
     }
 }
 
+// MARK: - Biometric Trajectory Chart
+struct BiometricTrajectoryChart: View {
+    let logs: [BiometricLog]
+    
+    @State private var selectedDate: Date? = nil
+    
+    var validWeightLogs: [BiometricLog] {
+        logs.filter { $0.weight != nil }.sorted { $0.timestamp < $1.timestamp }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("OPERATIONAL TRAJECTORY")
+                .font(Theme.Typography.technical(12, weight: .bold))
+                .foregroundColor(Theme.textSecondary)
+                .tracking(2)
+            
+            if validWeightLogs.isEmpty {
+                VStack {
+                    Image(systemName: "chart.xyaxis.line")
+                        .font(.largeTitle)
+                        .foregroundColor(Theme.textSecondary)
+                    Text("NO HISTORICAL DATA")
+                        .font(Theme.Typography.technical(14, weight: .bold))
+                        .foregroundColor(Theme.textSecondary)
+                        .padding(.top, 4)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
+                .background(Theme.surface)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Theme.border.opacity(0.3), lineWidth: 1)
+                )
+            } else {
+                Chart {
+                    ForEach(validWeightLogs) { log in
+                        if let weight = log.weight {
+                            if validWeightLogs.count == 1 {
+                                PointMark(
+                                    x: .value("Date", log.timestamp),
+                                    y: .value("Weight", weight)
+                                )
+                                .foregroundStyle(Theme.warningOrange)
+                                
+                                RuleMark(
+                                    y: .value("Weight", weight)
+                                )
+                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
+                                .foregroundStyle(Theme.warningOrange.opacity(0.5))
+                            } else {
+                                LineMark(
+                                    x: .value("Date", log.timestamp),
+                                    y: .value("Weight", weight)
+                                )
+                                .foregroundStyle(Theme.warningOrange)
+                                .lineStyle(StrokeStyle(lineWidth: 3))
+                                
+                                AreaMark(
+                                    x: .value("Date", log.timestamp),
+                                    y: .value("Weight", weight)
+                                )
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [Theme.warningOrange.opacity(0.3), Theme.warningOrange.opacity(0.0)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    
+                    if let selectedDate = selectedDate, let log = validWeightLogs.min(by: { abs($0.timestamp.timeIntervalSince(selectedDate)) < abs($1.timestamp.timeIntervalSince(selectedDate)) }), let weight = log.weight {
+                        RuleMark(
+                            x: .value("Date", log.timestamp)
+                        )
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 4]))
+                        .foregroundStyle(Theme.textSecondary)
+                        .annotation(position: .top, spacing: 0) {
+                            VStack(spacing: 4) {
+                                Text(log.timestamp.formatted(date: .abbreviated, time: .omitted))
+                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                                Text("\(String(format: "%.1f", weight))")
+                                    .font(Theme.Typography.technical(14, weight: .black))
+                                    .foregroundColor(.white)
+                            }
+                            .padding(8)
+                            .background(Theme.midnightMatte.opacity(0.8))
+                            .cornerRadius(8)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(preset: .aligned) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
+                            .foregroundStyle(Theme.border.opacity(0.1))
+                        AxisValueLabel() {
+                            if let date = value.as(Date.self) {
+                                Text(date.formatted(.dateTime.month().day()))
+                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
+                            .foregroundStyle(Theme.border.opacity(0.1))
+                        AxisValueLabel() {
+                            if let doubleValue = value.as(Double.self) {
+                                Text("\(Int(doubleValue))")
+                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                        }
+                    }
+                }
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        let x = value.location.x - geo[proxy.plotAreaFrame].origin.x
+                                        if let date: Date = proxy.value(atX: x) {
+                                            selectedDate = date
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        selectedDate = nil
+                                    }
+                            )
+                    }
+                }
+                .frame(height: 250)
+                .padding()
+                .background(Theme.surface)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Theme.border.opacity(0.3), lineWidth: 1)
+                )
+            }
+        }
+    }
+}
+
 #Preview {
     ProfileView()
-        .modelContainer(for: [Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self], inMemory: true)
+        .modelContainer(for: [Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, BiometricLog.self], inMemory: true)
 }
