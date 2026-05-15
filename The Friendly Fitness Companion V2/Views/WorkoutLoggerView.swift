@@ -29,6 +29,9 @@ struct WorkoutLoggerView: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                operationalSummaryHUD
+            }
             .navigationTitle("Current Grind")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -88,17 +91,26 @@ struct WorkoutLoggerView: View {
     private var exerciseListSection: some View {
         List {
             ForEach(session.exercises) { wEx in
+                let hasFailure = wEx.sets.contains { $0.hitFailure }
+                
                 NavigationLink(destination: ActiveExerciseView(workoutExercise: wEx, isEditMode: isEditMode)) {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(wEx.loggedName.isEmpty ? (wEx.exerciseRef?.name ?? "Unknown") : wEx.loggedName)
                                 .font(.headline)
                                 .foregroundColor(Theme.textPrimary)
+                                .shadow(color: hasFailure ? Theme.dangerRed.opacity(0.8) : .clear, radius: 4)
                             Text("\(wEx.sets.count) Sets")
                                 .font(.caption)
                                 .foregroundColor(Theme.textSecondary)
                         }
                         Spacer()
+                        if hasFailure {
+                            Image(systemName: "flame.fill")
+                                .foregroundColor(Theme.dangerRed)
+                                .shadow(color: Theme.dangerRed.opacity(0.6), radius: 4)
+                                .padding(.trailing, 4)
+                        }
                         Image(systemName: "chevron.right")
                             .foregroundColor(Theme.border)
                     }
@@ -221,6 +233,55 @@ struct WorkoutLoggerView: View {
         }
         
         dismiss()
+    }
+    
+    @ViewBuilder
+    private var operationalSummaryHUD: some View {
+        let totalTonnage = session.exercises.flatMap { $0.sets }.filter { $0.isCompleted }.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
+        let failureCount = session.exercises.flatMap { $0.sets }.filter { $0.hitFailure }.count
+        
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SESSION TONNAGE")
+                    .font(Theme.Typography.technical(10, weight: .bold))
+                    .foregroundColor(Theme.textSecondary)
+                Text("\(totalTonnage, specifier: "%.1f")")
+                    .font(Theme.Typography.technical(14, weight: .black))
+                    .monospacedDigit()
+                    .foregroundColor(Theme.textPrimary)
+            }
+            Spacer()
+            VStack(alignment: .center, spacing: 4) {
+                Text("INTENSITY SCORE")
+                    .font(Theme.Typography.technical(10, weight: .bold))
+                    .foregroundColor(Theme.textSecondary)
+                Text("\(session.totalIntensityScore)")
+                    .font(Theme.Typography.technical(14, weight: .black))
+                    .monospacedDigit()
+                    .foregroundColor(Theme.accent)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("FAILURE COUNT")
+                    .font(Theme.Typography.technical(10, weight: .bold))
+                    .foregroundColor(Theme.textSecondary)
+                Text("\(failureCount)")
+                    .font(Theme.Typography.technical(14, weight: .black))
+                    .monospacedDigit()
+                    .foregroundColor(failureCount > 0 ? Theme.dangerRed : Theme.textPrimary)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
+        .frame(height: 80)
+        .background(.ultraThinMaterial)
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Theme.border)
+                .frame(maxHeight: .infinity, alignment: .top)
+        )
     }
 }
 

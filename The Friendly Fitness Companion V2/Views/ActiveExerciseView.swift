@@ -167,6 +167,7 @@ struct ActiveExerciseView: View {
                                 setIndex: index + 1,
                                 exerciseSet: exerciseSet,
                                 ghostMaxWeight: ghostMaxWeight,
+                                tempoProfile: userSettings.first?.tempoProfile ?? "1-1-1",
                                 isEditMode: isEditMode,
                                 onComplete: { startTimer() },
                                 onDelete: { deleteSet(exerciseSet) }
@@ -338,29 +339,35 @@ struct SetRowView: View {
     let setIndex: Int
     @Bindable var exerciseSet: ExerciseSet
     let ghostMaxWeight: Double
+    let tempoProfile: String
     var isEditMode: Bool = true
     var onComplete: (() -> Void)?
     var onDelete: (() -> Void)?
     
-    // Local bindings for textfields
     @State private var weightString: String = ""
     @State private var repsString: String = ""
-    @State private var rpString: String = ""
-    
-    // Rest-Pause Timer State
     @State private var rpCountdown: Int = 0
     @State private var isRPActive: Bool = false
     @State private var rpTimer: Timer?
-    
-    // Notes
     @State private var isShowingNotes: Bool = false
+    
+    private var parsedTempoDuration: Int {
+        let digits = tempoProfile.components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap { Int($0) }
+        let sum = digits.reduce(0, +)
+        return sum > 0 ? sum : 1
+    }
+    
+    private var tutSeconds: Int {
+        return exerciseSet.reps * parsedTempoDuration
+    }
     
     var body: some View {
         ZStack {
             VStack(spacing: 8) {
-                // MAIN ROW: Checkmark, Weight, Reps, RP/Fail Buttons
-                HStack(spacing: 8) {
-                    // Set Completion Checkmark
+                // MAIN INTENSITY MATRIX
+                HStack(alignment: .top, spacing: 8) {
+                    
+                    // COLUMN 1: CHECKMARK
                     Button(action: {
                         if isEditMode {
                             exerciseSet.isCompleted.toggle()
@@ -375,53 +382,107 @@ struct SetRowView: View {
                             .font(.title3)
                     }
                     .disabled(!isEditMode)
-                    .frame(width: 40, alignment: .center)
+                    .frame(width: 40, height: 44, alignment: .center)
                     
-                    // Weight
-                    TextField("-", text: $weightString)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.center)
-                        .font(.title2.bold())
-                        // Gold highlight if beating the Ghost!
-                        .foregroundColor((exerciseSet.weight > ghostMaxWeight && ghostMaxWeight > 0) ? Theme.warningOrange : Theme.textPrimary)
-                        .padding(.vertical, 8)
-                        .background(Theme.surface)
-                        .cornerRadius(8)
-                        .disabled(!isEditMode)
-                        .onChange(of: weightString) { 
-                            let newWeight = Double(weightString) ?? 0.0
-                            // Trigger PR Haptic if just crossed the threshold!
-                            if newWeight > ghostMaxWeight && exerciseSet.weight <= ghostMaxWeight && ghostMaxWeight > 0 {
-                                HapticManager.shared.playPR()
-                            }
-                            exerciseSet.weight = newWeight 
+                    // COLUMN 2: METRICS MATRIX
+                    VStack(spacing: 6) {
+                        // Top Row: Primary Metrics (Weight & Reps)
+                        HStack(spacing: 8) {
+                            TextField("-", text: $weightString)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.center)
+                                .font(.title2.bold())
+                                .monospacedDigit()
+                                .foregroundColor((exerciseSet.weight > ghostMaxWeight && ghostMaxWeight > 0) ? Theme.warningOrange : Theme.textPrimary)
+                                .frame(height: 44)
+                                .background(Theme.surface)
+                                .cornerRadius(8)
+                                .disabled(!isEditMode)
+                                .onChange(of: weightString) { 
+                                    let newWeight = Double(weightString) ?? 0.0
+                                    if newWeight > ghostMaxWeight && exerciseSet.weight <= ghostMaxWeight && ghostMaxWeight > 0 {
+                                        HapticManager.shared.playPR()
+                                    }
+                                    exerciseSet.weight = newWeight 
+                                }
+                            
+                            TextField("-", text: $repsString)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.center)
+                                .font(.title2.bold())
+                                .monospacedDigit()
+                                .foregroundColor(Theme.textPrimary)
+                                .frame(height: 44)
+                                .background(Theme.surface)
+                                .cornerRadius(8)
+                                .disabled(!isEditMode)
+                                .onChange(of: repsString) { exerciseSet.reps = Int(repsString) ?? 0 }
                         }
-                        .frame(maxWidth: .infinity)
+                        
+                        // Middle Row: Inroad Gauge
+                        GeometryReader { geo in
+                            let ratio = ghostMaxWeight > 0 ? min(exerciseSet.weight / ghostMaxWeight, 1.0) : 0.0
+                            let isBreakthrough = ghostMaxWeight > 0 && exerciseSet.weight > ghostMaxWeight
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(Theme.surface)
+                                Rectangle()
+                                    .fill(isBreakthrough ? Theme.warningOrange : Theme.accent)
+                                    .frame(width: geo.size.width * ratio)
+                                    .animation(.spring(), value: ratio)
+                                    .symbolEffect(.pulse, options: .repeating, isActive: isBreakthrough)
+                            }
+                        }
+                        .frame(height: 4)
+                        .clipShape(Capsule())
+                        
+                        // Bottom Row: Micro-Metrics
+                        HStack {
+                            Text("TUT: \(tutSeconds)S")
+                                .font(Theme.Typography.technical(10, weight: .bold))
+                                .monospacedDigit()
+                                .foregroundColor(Theme.textSecondary)
+                            
+                            Spacer()
+                            
+                            // Forced Reps
+                            HStack(spacing: 4) {
+                                Text("F")
+                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                                Button("-") { if exerciseSet.forcedReps > 0 { exerciseSet.forcedReps -= 1; HapticManager.shared.playSelection() } }.disabled(!isEditMode)
+                                Text("\(exerciseSet.forcedReps)")
+                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                    .monospacedDigit()
+                                    .foregroundColor(Theme.accent)
+                                Button("+") { exerciseSet.forcedReps += 1; HapticManager.shared.playSelection() }.disabled(!isEditMode)
+                            }
+                            
+                            Spacer()
+                            
+                            // Negatives
+                            HStack(spacing: 4) {
+                                Text("N")
+                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                                Button("-") { if exerciseSet.negatives > 0 { exerciseSet.negatives -= 1; HapticManager.shared.playSelection() } }.disabled(!isEditMode)
+                                Text("\(exerciseSet.negatives)")
+                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                    .monospacedDigit()
+                                    .foregroundColor(Theme.warningOrange)
+                                Button("+") { exerciseSet.negatives += 1; HapticManager.shared.playSelection() }.disabled(!isEditMode)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
                     
-                    // Reps
-                    TextField("-", text: $repsString)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.center)
-                        .font(.title2.bold())
-                        .foregroundColor(Theme.textPrimary)
-                        .padding(.vertical, 8)
-                        .background(Theme.surface)
-                        .cornerRadius(8)
-                        .disabled(!isEditMode)
-                        .onChange(of: repsString) { exerciseSet.reps = Int(repsString) ?? 0 }
-                        .frame(maxWidth: .infinity)
-                    
-                    // Actions (Fail / Rest Pause / Notes)
+                    // COLUMN 3: ACTIONS
                     HStack(spacing: 12) {
-                        // Rest Pause Button
                         Button(action: {
                             HapticManager.shared.playLightImpact()
-                            exerciseSet.restPauses.append(0) // Add empty RP slot
-                            
+                            exerciseSet.restPauses.append(0)
                             rpTimer?.invalidate()
                             rpCountdown = 15
                             isRPActive = true
-                            
                             rpTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
                                 if rpCountdown > 0 {
                                     rpCountdown -= 1
@@ -437,7 +498,6 @@ struct SetRowView: View {
                         }
                         .disabled(!isEditMode)
                         
-                        // Failure Toggle
                         Button(action: {
                             HapticManager.shared.playHeavyImpact()
                             exerciseSet.hitFailure.toggle()
@@ -447,77 +507,15 @@ struct SetRowView: View {
                         }
                         .disabled(!isEditMode)
                         
-                        // Notes Toggle
                         Button(action: {
                             HapticManager.shared.playLightImpact()
-                            withAnimation {
-                                isShowingNotes.toggle()
-                            }
+                            withAnimation { isShowingNotes.toggle() }
                         }) {
                             Image(systemName: "square.and.pencil")
                                 .foregroundColor((isShowingNotes || !exerciseSet.notes.isEmpty) ? Theme.accent : Theme.border)
                         }
                     }
-                    .frame(width: 100, alignment: .center)
-                }
-                
-                // SUB ROW: HIT Inputs (Forced & Negatives)
-                HStack(spacing: 8) {
-                    Spacer().frame(width: 40) // Match Checkmark width
-                    Spacer().frame(maxWidth: .infinity) // Match Weight width
-                    
-                    HStack(spacing: 8) {
-                        // Forced Reps
-                        HStack(spacing: 4) {
-                            Text("F")
-                                .font(Theme.Typography.technical(10, weight: .bold))
-                                .foregroundColor(Theme.textSecondary)
-                            Button("-") { 
-                                if exerciseSet.forcedReps > 0 { 
-                                    exerciseSet.forcedReps -= 1 
-                                    HapticManager.shared.playSelection()
-                                } 
-                            }
-                            .disabled(!isEditMode)
-                            Text("\(exerciseSet.forcedReps)")
-                                .font(Theme.Typography.technical(12))
-                                .foregroundColor(Theme.textPrimary)
-                                .frame(width: 16)
-                            Button("+") { 
-                                exerciseSet.forcedReps += 1 
-                                HapticManager.shared.playSelection()
-                            }
-                            .disabled(!isEditMode)
-                        }
-                        .foregroundColor(Theme.accent)
-                        
-                        // Negatives
-                        HStack(spacing: 4) {
-                            Text("N")
-                                .font(Theme.Typography.technical(10, weight: .bold))
-                                .foregroundColor(Theme.textSecondary)
-                            Button("-") { 
-                                if exerciseSet.negatives > 0 { 
-                                    exerciseSet.negatives -= 1 
-                                    HapticManager.shared.playSelection()
-                                } 
-                            }
-                            .disabled(!isEditMode)
-                            Text("\(exerciseSet.negatives)")
-                                .font(Theme.Typography.technical(12))
-                                .foregroundColor(Theme.textPrimary)
-                                .frame(width: 16)
-                            Button("+") { 
-                                exerciseSet.negatives += 1 
-                                HapticManager.shared.playSelection()
-                            }
-                            .disabled(!isEditMode)
-                        }
-                        .foregroundColor(Theme.warningOrange)
-                    }
-                    .frame(maxWidth: .infinity) // Match Reps width
-                    
-                    Spacer().frame(width: 100) // Match Actions width
+                    .frame(width: 100, height: 44, alignment: .center)
                 }
                 
                 // NOTES ROW
@@ -536,52 +534,53 @@ struct SetRowView: View {
                             .stroke(Theme.border.opacity(0.5), lineWidth: 1)
                     )
                     .disabled(!isEditMode)
-                    .padding(.leading, 40) // Match checkmark width for nice indent
+                    .padding(.leading, 40)
                     .padding(.trailing, 10)
                 }
-
             
-            // Rest Pauses Display
-            if !exerciseSet.restPauses.isEmpty {
-                HStack {
-                    Text("+ RP:")
-                        .font(Theme.Typography.technical(12, weight: .bold))
-                        .foregroundColor(Theme.warningOrange)
-                    
-                    ForEach(exerciseSet.restPauses.indices, id: \.self) { rpIndex in
-                        TextField("0", value: Binding(
-                            get: { exerciseSet.restPauses[rpIndex] },
-                            set: { exerciseSet.restPauses[rpIndex] = $0 }
-                        ), format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.center)
-                        .font(.body.bold())
-                        .frame(width: 40)
-                        .padding(4)
-                        .background(Theme.surface)
-                        .cornerRadius(6)
-                        .foregroundColor(Theme.warningOrange)
-                        .disabled(!isEditMode)
-                    }
-                    Spacer()
-                }
-                .padding(.leading, 50)
-            }
-            
-            if isRPActive {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Theme.surface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Theme.warningOrange, lineWidth: 2)
-                    )
-                    .overlay(
-                        Text("REST-PAUSE: \(rpCountdown)s")
-                            .font(Theme.Typography.technical(16, weight: .bold))
+                // Rest Pauses Display
+                if !exerciseSet.restPauses.isEmpty {
+                    HStack {
+                        Text("+ RP:")
+                            .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.warningOrange)
-                    )
-                    .opacity(0.95)
-            }
+                        
+                        ForEach(exerciseSet.restPauses.indices, id: \.self) { rpIndex in
+                            TextField("0", value: Binding(
+                                get: { exerciseSet.restPauses[rpIndex] },
+                                set: { exerciseSet.restPauses[rpIndex] = $0 }
+                            ), format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.center)
+                            .font(.body.bold())
+                            .frame(width: 40)
+                            .padding(4)
+                            .background(Theme.surface)
+                            .cornerRadius(6)
+                            .foregroundColor(Theme.warningOrange)
+                            .disabled(!isEditMode)
+                        }
+                        Spacer()
+                    }
+                    .padding(.leading, 50)
+                }
+                
+                if isRPActive {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Theme.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Theme.warningOrange, lineWidth: 2)
+                        )
+                        .overlay(
+                            Text("REST-PAUSE: \(rpCountdown)s")
+                                .font(Theme.Typography.technical(16, weight: .bold))
+                                .monospacedDigit()
+                                .foregroundColor(Theme.warningOrange)
+                        )
+                        .opacity(0.95)
+                        .frame(height: 40)
+                }
             }
         }
         .contextMenu {
