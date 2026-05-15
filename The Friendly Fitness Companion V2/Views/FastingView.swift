@@ -101,6 +101,7 @@ struct FastingView: View {
                                 endFast()
                             }
                         )
+                            .frame(height: 320)
                             .padding(.top, activeFast == nil ? 10 : 40)
                         
                         // Restored Fasting Cards (Vertical to prevent bugs)
