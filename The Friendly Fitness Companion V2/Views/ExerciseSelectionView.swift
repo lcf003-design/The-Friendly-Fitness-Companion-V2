@@ -8,6 +8,7 @@ struct ExerciseSelectionView: View {
     
     @State private var searchText = ""
     @State private var isShowingAddSheet = false
+    @State private var isShowingHelp = false
     
     var onSelect: (Exercise) -> Void
     
@@ -77,11 +78,20 @@ struct ExerciseSelectionView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        isShowingAddSheet = true
-                    }) {
-                        Image(systemName: "plus")
-                            .foregroundColor(Theme.accent)
+                    HStack {
+                        Button(action: {
+                            isShowingAddSheet = true
+                        }) {
+                            Image(systemName: "plus")
+                                .foregroundColor(Theme.accent)
+                        }
+                        
+                        Button(action: {
+                            isShowingHelp = true
+                        }) {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundColor(Theme.textSecondary)
+                        }
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -92,6 +102,9 @@ struct ExerciseSelectionView: View {
             }
             .sheet(isPresented: $isShowingAddSheet) {
                 AddExerciseSheet()
+            }
+            .sheet(isPresented: $isShowingHelp) {
+                ExerciseSelectionHelpView()
             }
         }
     }

@@ -9,6 +9,7 @@ struct TemplateBuilderView: View {
     @State private var selectedExercises: [Exercise] = []
     
     @State private var isShowingExerciseSelection = false
+    @State private var isShowingHelp = false
     
     var body: some View {
         NavigationStack {
@@ -108,10 +109,19 @@ struct TemplateBuilderView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
+                    HStack {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .foregroundColor(Theme.textSecondary)
+                        
+                        Button(action: {
+                            isShowingHelp = true
+                        }) {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundColor(Theme.textSecondary)
+                        }
                     }
-                    .foregroundColor(Theme.textSecondary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -125,6 +135,9 @@ struct TemplateBuilderView: View {
             }
             .sheet(isPresented: $isShowingExerciseSelection) {
                 TemplateExerciseSelectionView(selectedExercises: $selectedExercises)
+            }
+            .sheet(isPresented: $isShowingHelp) {
+                TemplateBuilderHelpView()
             }
         }
         .preferredColorScheme(.dark)

@@ -8,6 +8,7 @@ struct ExerciseManagerView: View {
     @Query private var userSettings: [UserSettings]
     
     @State private var isShowingAddSheet = false
+    @State private var isShowingHelp = false
     
     // Group exercises by target muscle
     private var groupedExercises: [String: [Exercise]] {
@@ -86,16 +87,27 @@ struct ExerciseManagerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    isShowingAddSheet = true
-                }) {
-                    Image(systemName: "plus")
-                        .foregroundColor(Theme.accent)
+                HStack {
+                    Button(action: {
+                        isShowingHelp = true
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    Button(action: {
+                        isShowingAddSheet = true
+                    }) {
+                        Image(systemName: "plus")
+                            .foregroundColor(Theme.accent)
+                    }
                 }
             }
         }
         .sheet(isPresented: $isShowingAddSheet) {
             AddExerciseSheet()
+        }
+        .sheet(isPresented: $isShowingHelp) {
+            ExerciseManagerHelpView()
         }
     }
     

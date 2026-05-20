@@ -122,6 +122,7 @@ final class UserSettings {
     var bodyWeight: Double = 0.0
     var weightUnit: String = "lb" // "lb" or "kg"
     var isSeeded: Bool = false
+    var isOnboarded: Bool = false
     
     // Phase 6 Expansion Settings
     var isRestTimerEnabled: Bool = true
@@ -139,12 +140,13 @@ final class UserSettings {
     // Ghost Tracking
     var ghostTrackingPreference: Int = 0 // 0 = Most Recent, 1 = All-Time PR
     
-    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0) {
+    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isOnboarded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0) {
         self.id = id
         self.userName = userName
         self.bodyWeight = bodyWeight
         self.weightUnit = weightUnit
         self.isSeeded = isSeeded
+        self.isOnboarded = isOnboarded
         
         self.isRestTimerEnabled = isRestTimerEnabled
         self.isHapticMetronomeEnabled = isHapticMetronomeEnabled
@@ -206,5 +208,24 @@ final class FastingSession {
         self.targetHours = targetHours
         self.isCompleted = isCompleted
         self.endTime = endTime
+    }
+}
+
+@Model
+final class PhysiquePhoto {
+    var id: UUID = UUID()
+    var timestamp: Date = Date()
+    @Attribute(.externalStorage) var imageData: Data?
+    var weightAtTime: Double = 0.0
+    var phaseAtTime: String = "Hypertrophy"
+    var note: String = ""
+    
+    init(id: UUID = UUID(), timestamp: Date = Date(), imageData: Data? = nil, weightAtTime: Double = 0.0, phaseAtTime: String = "Hypertrophy", note: String = "") {
+        self.id = id
+        self.timestamp = timestamp
+        self.imageData = imageData
+        self.weightAtTime = weightAtTime
+        self.phaseAtTime = phaseAtTime
+        self.note = note
     }
 }

@@ -6,6 +6,9 @@ struct DashboardView: View {
     @Query(sort: \WorkoutSession.timestamp, order: .reverse) private var recentSessions: [WorkoutSession]
     @Query private var userSettings: [UserSettings]
     @State private var isShowingFastingToolbox = false
+    @State private var isShowingHelp = false
+    @State private var selectedMuscle: String? = nil
+    @State private var isShowingMuscleDetail = false
     
     // Calculates the number of days since a specific muscle group was trained
     private var recoveryMap: [String: Int] {
@@ -86,12 +89,15 @@ struct DashboardView: View {
                                 .tracking(2)
                                 .padding(.horizontal)
                             
-                            AnatomicalBodyMap(muscleRecoveryState: recoveryMap)
-                                .frame(height: 350)
-                                .padding()
-                                .background(Theme.surface)
-                                .cornerRadius(16)
-                                .padding(.horizontal)
+                            AnatomicalBodyMap(muscleRecoveryState: recoveryMap) { muscle in
+                                selectedMuscle = muscle
+                                isShowingMuscleDetail = true
+                            }
+                            .frame(height: 350)
+                            .padding()
+                            .background(Theme.surface)
+                            .cornerRadius(16)
+                            .padding(.horizontal)
                         }
                         
                         // Volume Analytics Chart Removed
@@ -191,6 +197,15 @@ struct DashboardView: View {
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        isShowingHelp = true
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button(action: {
@@ -212,6 +227,14 @@ struct DashboardView: View {
             }
             .fullScreenCover(isPresented: $isShowingFastingToolbox) {
                 FastingView(isPresented: $isShowingFastingToolbox)
+            }
+            .sheet(isPresented: $isShowingHelp) {
+                DashboardHelpView()
+            }
+            .sheet(isPresented: $isShowingMuscleDetail) {
+                if let muscle = selectedMuscle {
+                    MuscleDetailView(muscleName: muscle, recoveryState: recoveryMap)
+                }
             }
         }
     }

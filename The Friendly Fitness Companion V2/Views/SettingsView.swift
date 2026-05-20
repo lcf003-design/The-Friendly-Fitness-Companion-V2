@@ -10,6 +10,7 @@ struct SettingsView: View {
     @Query private var allSessions: [WorkoutSession]
     @State private var exportedURL: URL?
     @State private var showShareSheet = false
+    @State private var isShowingHelp = false
     
     let tempoOptions = [
         "Mentzer HIT (4-2-4)",
@@ -222,6 +223,15 @@ struct SettingsView: View {
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        isShowingHelp = true
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         try? modelContext.save()
@@ -230,6 +240,9 @@ struct SettingsView: View {
                     .foregroundColor(Theme.accent)
                 }
             }
+        }
+        .sheet(isPresented: $isShowingHelp) {
+            SettingsHelpView()
         }
         .sheet(isPresented: $showShareSheet) {
             if let url = exportedURL {

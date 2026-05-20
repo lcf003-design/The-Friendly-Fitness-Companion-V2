@@ -37,6 +37,7 @@ struct FastingView: View {
     @State private var selectedPhase: FastingPhase?
     @State private var selectedProtocolHours: Int = 16
     @State private var justFinishedFasting: Bool = false
+    @State private var isShowingHelp: Bool = false
     
     // Quick Protocols
     let quickProtocols = [
@@ -117,10 +118,19 @@ struct FastingView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Dismiss") {
-                        isPresented = false
+                    HStack {
+                        Button("Dismiss") {
+                            isPresented = false
+                        }
+                        .foregroundColor(Theme.textSecondary)
+                        
+                        Button(action: {
+                            isShowingHelp = true
+                        }) {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundColor(Theme.textSecondary)
+                        }
                     }
-                    .foregroundColor(Theme.textSecondary)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
@@ -136,6 +146,9 @@ struct FastingView: View {
             }
             .fullScreenCover(item: $selectedPhase) { phase in
                 FastingPhaseDetailView(phase: phase)
+            }
+            .sheet(isPresented: $isShowingHelp) {
+                FastingHelpView()
             }
         }
     }

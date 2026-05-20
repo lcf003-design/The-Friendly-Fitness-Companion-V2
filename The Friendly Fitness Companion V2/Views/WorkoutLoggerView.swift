@@ -8,27 +8,25 @@ struct WorkoutLoggerView: View {
     @Query private var userSettings: [UserSettings]
     @State private var isShowingExerciseSelection = false
     @State private var isEditMode: Bool = false
+    @State private var isShowingHelp: Bool = false
     var isNewSession: Bool = false
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Theme.midnightMatte.ignoresSafeArea()
+            VStack(spacing: 0) {
+                headerSection
                 
-                VStack(spacing: 0) {
-                    headerSection
-                    
-                    if session.exercises.isEmpty {
-                        emptyStateSection
-                    } else {
-                        exerciseListSection
-                    }
-                    
-                    if isEditMode {
-                        footerActionSection
-                    }
+                if session.exercises.isEmpty {
+                    emptyStateSection
+                } else {
+                    exerciseListSection
+                }
+                
+                if isEditMode {
+                    footerActionSection
                 }
             }
+            .background(Theme.midnightMatte.ignoresSafeArea())
             .safeAreaInset(edge: .bottom) {
                 operationalSummaryHUD
             }
@@ -38,10 +36,18 @@ struct WorkoutLoggerView: View {
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        isShowingHelp = true
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     trailingToolbarButton
                 }
-                
                 ToolbarItem(placement: .navigationBarLeading) {
                     leadingToolbarButton
                 }
@@ -60,6 +66,9 @@ struct WorkoutLoggerView: View {
                     try? modelContext.save() // Force SwiftData to broadcast the relationship update to SwiftUI
                 }
             }
+            .sheet(isPresented: $isShowingHelp) {
+                WorkoutLoggerHelpView()
+            }
         }
     }
     
@@ -76,15 +85,14 @@ struct WorkoutLoggerView: View {
     @ViewBuilder
     private var emptyStateSection: some View {
         VStack(spacing: 16) {
-            Spacer()
             Image(systemName: "dumbbell.fill")
                 .font(.system(size: 40))
                 .foregroundColor(Theme.border)
             Text("No exercises added.")
                 .font(Theme.Typography.technical(16))
                 .foregroundColor(Theme.textSecondary)
-            Spacer()
         }
+        .frame(maxHeight: .infinity)
     }
     
     @ViewBuilder

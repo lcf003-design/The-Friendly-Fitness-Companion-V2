@@ -21,6 +21,7 @@ struct ActiveExerciseView: View {
     
     // Plate Calculator State
     @State private var showPlateCalculator = false
+    @State private var isShowingHelp = false
     
     init(workoutExercise: WorkoutExercise, isEditMode: Bool = true) {
         self.workoutExercise = workoutExercise
@@ -236,13 +237,25 @@ struct ActiveExerciseView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if userSettings.first?.isHapticMetronomeEnabled == true {
-                    Button(action: toggleMetronome) {
-                        Image(systemName: isMetronomeActive ? "metronome.fill" : "metronome")
-                            .foregroundColor(isMetronomeActive ? Theme.warningOrange : Theme.accent)
+                HStack {
+                    Button(action: {
+                        isShowingHelp = true
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    
+                    if userSettings.first?.isHapticMetronomeEnabled == true {
+                        Button(action: toggleMetronome) {
+                            Image(systemName: isMetronomeActive ? "metronome.fill" : "metronome")
+                                .foregroundColor(isMetronomeActive ? Theme.warningOrange : Theme.accent)
+                        }
                     }
                 }
             }
+        }
+        .sheet(isPresented: $isShowingHelp) {
+            ActiveExerciseHelpView()
         }
         .onDisappear {
             stopTimer()
@@ -514,8 +527,17 @@ struct SetRowView: View {
                             Image(systemName: "square.and.pencil")
                                 .foregroundColor((isShowingNotes || !exerciseSet.notes.isEmpty) ? Theme.accent : Theme.border)
                         }
+                        
+                        Button(action: {
+                            HapticManager.shared.playHeavyImpact()
+                            onDelete?()
+                        }) {
+                            Image(systemName: "trash")
+                                .foregroundColor(Theme.dangerRed)
+                        }
+                        .disabled(!isEditMode)
                     }
-                    .frame(width: 100, height: 44, alignment: .center)
+                    .frame(width: 120, height: 44, alignment: .center)
                 }
                 
                 // NOTES ROW
@@ -566,20 +588,45 @@ struct SetRowView: View {
                 }
                 
                 if isRPActive {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Theme.surface)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Theme.warningOrange, lineWidth: 2)
-                        )
-                        .overlay(
-                            Text("REST-PAUSE: \(rpCountdown)s")
-                                .font(Theme.Typography.technical(16, weight: .bold))
-                                .monospacedDigit()
+                    HStack {
+                        // Restart Button
+                        Button(action: {
+                            HapticManager.shared.playLightImpact()
+                            rpCountdown = 15
+                        }) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.title3)
                                 .foregroundColor(Theme.warningOrange)
-                        )
-                        .opacity(0.95)
-                        .frame(height: 40)
+                        }
+                        
+                        Spacer()
+                        
+                        Text("REST-PAUSE: \(rpCountdown)s")
+                            .font(Theme.Typography.technical(16, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundColor(Theme.warningOrange)
+                            
+                        Spacer()
+                        
+                        // Stop Button
+                        Button(action: {
+                            HapticManager.shared.playLightImpact()
+                            rpTimer?.invalidate()
+                            isRPActive = false
+                        }) {
+                            Image(systemName: "stop.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(Theme.warningOrange)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 40)
+                    .background(Theme.surface)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Theme.warningOrange, lineWidth: 2)
+                    )
                 }
             }
         }

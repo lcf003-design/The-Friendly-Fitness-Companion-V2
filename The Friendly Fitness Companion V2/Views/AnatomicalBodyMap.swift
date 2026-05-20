@@ -3,6 +3,7 @@ import SwiftData
 
 struct AnatomicalBodyMap: View {
     var muscleRecoveryState: [String: Int]
+    var onNodeTap: ((String) -> Void)?
     
     var body: some View {
         HStack(spacing: 20) {
@@ -21,29 +22,29 @@ struct AnatomicalBodyMap: View {
                         Circle().fill(Theme.border).frame(width: width * 0.12, height: width * 0.12).position(x: width * 0.5, y: height * 0.15)
                         
                         // Shoulders
-                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12)
+                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.3, y: height * 0.32)
-                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12)
+                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.7, y: height * 0.32)
                         
                         // Chest (Large Center)
-                        GlowingNode(muscleName: "Chest", state: muscleRecoveryState, size: width * 0.22)
+                        GlowingNode(muscleName: "Chest", state: muscleRecoveryState, size: width * 0.22, onNodeTap: onNodeTap)
                             .position(x: width * 0.5, y: height * 0.38)
                             
                         // Arms
-                        GlowingNode(muscleName: "Arms", state: muscleRecoveryState, size: width * 0.1)
+                        GlowingNode(muscleName: "Arms", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.18, y: height * 0.52)
-                        GlowingNode(muscleName: "Arms", state: muscleRecoveryState, size: width * 0.1)
+                        GlowingNode(muscleName: "Arms", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.82, y: height * 0.52)
                         
                         // Abs
-                        GlowingNode(muscleName: "Abs", state: muscleRecoveryState, size: width * 0.15)
+                        GlowingNode(muscleName: "Abs", state: muscleRecoveryState, size: width * 0.15, onNodeTap: onNodeTap)
                             .position(x: width * 0.5, y: height * 0.58)
                             
                         // Quads
-                        GlowingNode(muscleName: "Quads", state: muscleRecoveryState, size: width * 0.16)
+                        GlowingNode(muscleName: "Quads", state: muscleRecoveryState, size: width * 0.16, onNodeTap: onNodeTap)
                             .position(x: width * 0.38, y: height * 0.78)
-                        GlowingNode(muscleName: "Quads", state: muscleRecoveryState, size: width * 0.16)
+                        GlowingNode(muscleName: "Quads", state: muscleRecoveryState, size: width * 0.16, onNodeTap: onNodeTap)
                             .position(x: width * 0.62, y: height * 0.78)
                     }
                 }
@@ -64,39 +65,39 @@ struct AnatomicalBodyMap: View {
                         Circle().fill(Theme.border).frame(width: width * 0.12, height: width * 0.12).position(x: width * 0.5, y: height * 0.15)
                         
                         // Shoulders (Rear Delts)
-                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12)
+                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.3, y: height * 0.32)
-                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12)
+                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.7, y: height * 0.32)
                         
                         // Back (Upper/Mid Back - Large Center)
-                        GlowingNode(muscleName: "Back", state: muscleRecoveryState, size: width * 0.22)
+                        GlowingNode(muscleName: "Back", state: muscleRecoveryState, size: width * 0.22, onNodeTap: onNodeTap)
                             .position(x: width * 0.5, y: height * 0.38)
                             
                         // Triceps
-                        GlowingNode(muscleName: "Triceps", state: muscleRecoveryState, size: width * 0.1)
+                        GlowingNode(muscleName: "Triceps", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.18, y: height * 0.52)
-                        GlowingNode(muscleName: "Triceps", state: muscleRecoveryState, size: width * 0.1)
+                        GlowingNode(muscleName: "Triceps", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.82, y: height * 0.52)
                         
                         // Lats (Combined into Back for this view)
                             
                         // Glutes
-                        GlowingNode(muscleName: "Glutes", state: muscleRecoveryState, size: width * 0.14)
+                        GlowingNode(muscleName: "Glutes", state: muscleRecoveryState, size: width * 0.14, onNodeTap: onNodeTap)
                             .position(x: width * 0.38, y: height * 0.65)
-                        GlowingNode(muscleName: "Glutes", state: muscleRecoveryState, size: width * 0.14)
+                        GlowingNode(muscleName: "Glutes", state: muscleRecoveryState, size: width * 0.14, onNodeTap: onNodeTap)
                             .position(x: width * 0.62, y: height * 0.65)
                             
                         // Hamstrings
-                        GlowingNode(muscleName: "Hamstrings", state: muscleRecoveryState, size: width * 0.12)
+                        GlowingNode(muscleName: "Hamstrings", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.38, y: height * 0.78)
-                        GlowingNode(muscleName: "Hamstrings", state: muscleRecoveryState, size: width * 0.12)
+                        GlowingNode(muscleName: "Hamstrings", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.62, y: height * 0.78)
                             
                         // Calves
-                        GlowingNode(muscleName: "Calves", state: muscleRecoveryState, size: width * 0.1)
+                        GlowingNode(muscleName: "Calves", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.38, y: height * 0.90)
-                        GlowingNode(muscleName: "Calves", state: muscleRecoveryState, size: width * 0.1)
+                        GlowingNode(muscleName: "Calves", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.62, y: height * 0.90)
                     }
                 }
@@ -111,6 +112,7 @@ struct GlowingNode: View {
     let muscleName: String
     let state: [String: Int]
     let size: CGFloat
+    var onNodeTap: ((String) -> Void)?
     
     var body: some View {
         let color = colorForRecovery(days: state[muscleName])
@@ -125,6 +127,9 @@ struct GlowingNode: View {
             )
             // Add a subtle pulse animation if recovering/danger
             .opacity(color == Theme.apexGreen ? 0.8 : 1.0)
+            .onTapGesture {
+                onNodeTap?(muscleName)
+            }
     }
     
     private func colorForRecovery(days: Int?) -> Color {

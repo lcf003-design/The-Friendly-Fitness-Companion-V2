@@ -4,6 +4,7 @@ import SwiftData
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settings: [UserSettings]
+    @State private var showOnboarding: Bool = false
     @Query private var allExercises: [Exercise]
     @Query private var sessions: [WorkoutSession]
     
@@ -32,6 +33,12 @@ struct MainTabView: View {
         .tint(Theme.accent)
         .onAppear {
             seedInitialData()
+            if let userSettings = settings.first, !userSettings.isOnboarded {
+                showOnboarding = true
+            }
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(isPresented: $showOnboarding)
         }
         .preferredColorScheme(settings.first?.themePreference == 1 ? .light : (settings.first?.themePreference == 2 ? .dark : nil))
     }
@@ -45,14 +52,51 @@ struct MainTabView: View {
             modelContext.insert(newSettings)
             
             let defaultExercises: [Exercise] = [
-                Exercise(name: "Bench Press", targetMuscle: "Chest", notes: "Keep your feet planted and squeeze your chest at the top."),
-                Exercise(name: "Overhead Press", targetMuscle: "Shoulders", notes: "Stay tall and press directly overhead."),
-                Exercise(name: "Squat", targetMuscle: "Quads", notes: "Focus on a smooth, deep movement."),
-                Exercise(name: "Deadlift", targetMuscle: "Back", notes: "Keep your back straight and lift with intent."),
-                Exercise(name: "Barbell Row", targetMuscle: "Back", notes: "Pull the bar toward your navel."),
-                Exercise(name: "Leg Press", targetMuscle: "Quads", notes: "Control the weight on the way down."),
-                Exercise(name: "Lat Pulldowns", targetMuscle: "Lats", notes: "Think about pulling with your elbows."),
-                Exercise(name: "Bicep Curls", targetMuscle: "Arms", notes: "Focus on the curl, not the swing.")
+                // Chest
+                Exercise(name: "Barbell Bench Press", targetMuscle: "Chest"),
+                Exercise(name: "Incline Dumbbell Press", targetMuscle: "Chest"),
+                Exercise(name: "Pec Deck Fly", targetMuscle: "Chest"),
+                Exercise(name: "Cable Crossover", targetMuscle: "Chest"),
+                Exercise(name: "Dips", targetMuscle: "Chest"),
+                
+                // Back
+                Exercise(name: "Barbell Deadlift", targetMuscle: "Back"),
+                Exercise(name: "Pull-Ups", targetMuscle: "Back"),
+                Exercise(name: "Lat Pulldown", targetMuscle: "Back"),
+                Exercise(name: "Barbell Row", targetMuscle: "Back"),
+                Exercise(name: "Seated Cable Row", targetMuscle: "Back"),
+                Exercise(name: "Dumbbell Row", targetMuscle: "Back"),
+                
+                // Legs (Quads, Hamstrings, Glutes, Calves)
+                Exercise(name: "Barbell Back Squat", targetMuscle: "Quads"),
+                Exercise(name: "Leg Press", targetMuscle: "Quads"),
+                Exercise(name: "Bulgarian Split Squat", targetMuscle: "Quads"),
+                Exercise(name: "Leg Extension", targetMuscle: "Quads"),
+                Exercise(name: "Romanian Deadlift (RDL)", targetMuscle: "Hamstrings"),
+                Exercise(name: "Lying Leg Curl", targetMuscle: "Hamstrings"),
+                Exercise(name: "Barbell Hip Thrust", targetMuscle: "Glutes"),
+                Exercise(name: "Standing Calf Raise", targetMuscle: "Calves"),
+                Exercise(name: "Seated Calf Raise", targetMuscle: "Calves"),
+                
+                // Shoulders
+                Exercise(name: "Overhead Press", targetMuscle: "Shoulders"),
+                Exercise(name: "Dumbbell Lateral Raise", targetMuscle: "Shoulders"),
+                Exercise(name: "Cable Lateral Raise", targetMuscle: "Shoulders"),
+                Exercise(name: "Reverse Pec Deck", targetMuscle: "Shoulders"),
+                Exercise(name: "Face Pulls", targetMuscle: "Shoulders"),
+                
+                // Arms (Biceps, Triceps)
+                Exercise(name: "Barbell Bicep Curl", targetMuscle: "Arms"),
+                Exercise(name: "Incline Dumbbell Curl", targetMuscle: "Arms"),
+                Exercise(name: "Hammer Curl", targetMuscle: "Arms"),
+                Exercise(name: "Tricep Pushdown", targetMuscle: "Arms"),
+                Exercise(name: "Overhead Tricep Extension", targetMuscle: "Arms"),
+                Exercise(name: "Skullcrushers", targetMuscle: "Arms"),
+                
+                // Abs
+                Exercise(name: "Cable Crunch", targetMuscle: "Abs"),
+                Exercise(name: "Hanging Leg Raise", targetMuscle: "Abs"),
+                Exercise(name: "Plank", targetMuscle: "Abs")
             ]
             
             for ex in defaultExercises {

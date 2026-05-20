@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Charts
+import PhotosUI
 
 struct ProfileView: View {
     @Query private var settingsQuery: [UserSettings]
@@ -13,11 +14,15 @@ struct ProfileView: View {
     @State private var isShowingSettings = false
     @State private var draftName = ""
     @State private var draftWeight = ""
-    @State private var draftBodyFat = ""
-    @State private var draftHeight = ""
-    @State private var draftAge = ""
     @State private var draftPhase = "Hypertrophy"
     @State private var isShowingFastingTimer = false
+    @State private var isShowingHelp = false
+    
+    // Physique Vault State
+    @Query(sort: \PhysiquePhoto.timestamp, order: .forward) private var physiquePhotos: [PhysiquePhoto]
+    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var isShowingVaultView = false
+    @State private var isProcessingPhoto = false
     
     let columns = [GridItem(.flexible()), GridItem(.flexible())]
     let phases = ["Hypertrophy", "Strength", "Cutting", "Recomp"]
@@ -149,24 +154,67 @@ struct ProfileView: View {
                             }
                         }
                         
-                        // 3. Scouting Report Grid
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("SCOUTING REPORT")
-                                .font(Theme.Typography.technical(12, weight: .bold))
-                                .foregroundColor(Theme.textSecondary)
-                                .tracking(2)
-                                .padding(.horizontal)
-                            
-                            LazyVGrid(columns: columns, spacing: 16) {
-                                BiometricCard(title: "BODY WEIGHT", value: String(format: "%.1f", settings?.bodyWeight ?? 0), unit: settings?.weightUnit ?? "lb", isEditing: isEditing, text: $draftWeight, keyboardType: .decimalPad)
-                                
-                                BiometricCard(title: "BODY FAT", value: String(format: "%.1f", settings?.bodyFatPercentage ?? 0), unit: "%", isEditing: isEditing, text: $draftBodyFat, keyboardType: .decimalPad)
-                                
-                                BiometricCard(title: "HEIGHT", value: "\(settings?.heightInches ?? 0)", unit: "in", isEditing: isEditing, text: $draftHeight, keyboardType: .numberPad)
-                                
-                                BiometricCard(title: "TRAINING AGE", value: "\(settings?.trainingAgeYears ?? 0)", unit: "yrs", isEditing: isEditing, text: $draftAge, keyboardType: .numberPad)
+                        // 3. Physique Vault & Focus
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Text("PHYSIQUE VAULT")
+                                    .font(Theme.Typography.technical(12, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                                    .tracking(2)
+                                Spacer()
+                                PhotosPicker(selection: $selectedPhotoItem, matching: .images, photoLibrary: .shared()) {
+                                    Image(systemName: "camera.viewfinder")
+                                        .font(.title2)
+                                        .foregroundColor(Theme.accent)
+                                }
                             }
                             .padding(.horizontal)
+                            
+                            if isProcessingPhoto {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity, minHeight: 120)
+                            } else if physiquePhotos.isEmpty {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                        .font(.largeTitle)
+                                        .foregroundColor(Theme.textSecondary)
+                                    Text("NO PHOTOS LOGGED")
+                                        .font(Theme.Typography.technical(12, weight: .bold))
+                                        .foregroundColor(Theme.textSecondary)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 120)
+                                .background(Theme.surface)
+                                .cornerRadius(12)
+                                .padding(.horizontal)
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 12) {
+                                        Spacer().frame(width: 4)
+                                        ForEach(physiquePhotos) { photo in
+                                            Button(action: {
+                                                isShowingVaultView = true
+                                            }) {
+                                                if let data = photo.imageData, let uiImage = UIImage(data: data) {
+                                                    Image(uiImage: uiImage)
+                                                        .resizable()
+                                                        .scaledToFill()
+                                                        .frame(width: 100, height: 140)
+                                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 8).stroke(Theme.border.opacity(0.3), lineWidth: 1)
+                                                        )
+                                                } else {
+                                                    Rectangle()
+                                                        .fill(Theme.surface)
+                                                        .frame(width: 100, height: 140)
+                                                        .cornerRadius(8)
+                                                }
+                                            }
+                                        }
+                                        Spacer().frame(width: 4)
+                                    }
+                                }
+                            }
                             
                             // Current Phase
                             VStack(alignment: .leading, spacing: 8) {
@@ -247,6 +295,15 @@ struct ProfileView: View {
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        isShowingHelp = true
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         isShowingSettings = true
@@ -261,8 +318,33 @@ struct ProfileView: View {
                     SettingsView(settings: currentSettings)
                 }
             }
+            .sheet(isPresented: $isShowingHelp) {
+                ProfileHelpView()
+            }
             .fullScreenCover(isPresented: $isShowingFastingTimer) {
                 FastingView(isPresented: $isShowingFastingTimer)
+            }
+            .fullScreenCover(isPresented: $isShowingVaultView) {
+                PhysiqueVaultView(isPresented: $isShowingVaultView)
+            }
+            .onChange(of: selectedPhotoItem) { _, newItem in
+                Task {
+                    if let newItem = newItem {
+                        isProcessingPhoto = true
+                        if let data = try? await newItem.loadTransferable(type: Data.self) {
+                            let photo = PhysiquePhoto(
+                                timestamp: Date(),
+                                imageData: data,
+                                weightAtTime: settings?.bodyWeight ?? 0.0,
+                                phaseAtTime: settings?.currentPhase ?? "Hypertrophy"
+                            )
+                            modelContext.insert(photo)
+                            try? modelContext.save()
+                        }
+                        selectedPhotoItem = nil
+                        isProcessingPhoto = false
+                    }
+                }
             }
         }
     }
@@ -280,9 +362,6 @@ struct ProfileView: View {
     private func startEditing() {
         draftName = settings?.userName ?? ""
         draftWeight = String(settings?.bodyWeight ?? 0)
-        draftBodyFat = String(settings?.bodyFatPercentage ?? 0)
-        draftHeight = String(settings?.heightInches ?? 0)
-        draftAge = String(settings?.trainingAgeYears ?? 0)
         draftPhase = settings?.currentPhase ?? "Hypertrophy"
         withAnimation {
             isEditing = true
@@ -293,13 +372,10 @@ struct ProfileView: View {
         if let currentSettings = settings {
             currentSettings.userName = draftName
             if let weight = Double(draftWeight) { currentSettings.bodyWeight = weight }
-            if let fat = Double(draftBodyFat) { currentSettings.bodyFatPercentage = fat }
-            if let height = Int(draftHeight) { currentSettings.heightInches = height }
-            if let age = Int(draftAge) { currentSettings.trainingAgeYears = age }
             currentSettings.currentPhase = draftPhase
             
             // Auto-Logging Integration
-            let log = BiometricLog(weight: Double(draftWeight), bodyFat: Double(draftBodyFat), notes: "Profile Edit")
+            let log = BiometricLog(weight: Double(draftWeight), notes: "Profile Edit")
             modelContext.insert(log)
         }
         try? modelContext.save()
@@ -345,7 +421,7 @@ struct MembershipCardView: View {
             // Content
             VStack(alignment: .leading) {
                 HStack {
-                    Text("ORIGIN ATHLETE")
+                    Text("ACTIVE OPERATOR")
                         .font(Theme.Typography.technical(12, weight: .black))
                         .foregroundColor(Theme.textSecondary)
                         .tracking(3)

@@ -6,9 +6,10 @@ struct JournalView: View {
     @Query(sort: \WorkoutSession.timestamp, order: .reverse) private var sessions: [WorkoutSession]
     @Query private var templates: [WorkoutTemplate]
     
-    @State private var activeSession: WorkoutSession?
-    @State private var isActiveSessionNew: Bool = false
+    @State private var activeSession: WorkoutSession? = nil
+    @State private var isActiveSessionNew = false
     @State private var isShowingTemplateBuilder = false
+    @State private var isShowingHelp = false
     
     enum FilterType: String, CaseIterable {
         case all = "ALL"
@@ -190,8 +191,21 @@ struct JournalView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        isShowingHelp = true
+                    }) {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+            }
             .fullScreenCover(item: $activeSession) { session in
                 WorkoutLoggerView(session: session, isNewSession: isActiveSessionNew)
+            }
+            .sheet(isPresented: $isShowingHelp) {
+                JournalHelpView()
             }
             .sheet(isPresented: $isShowingTemplateBuilder) {
                 TemplateBuilderView()
