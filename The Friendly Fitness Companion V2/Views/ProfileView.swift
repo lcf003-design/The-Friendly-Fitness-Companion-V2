@@ -745,5 +745,5 @@ struct BiometricTrajectoryChart: View {
 
 #Preview {
     ProfileView()
-        .modelContainer(for: [Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, BiometricLog.self], inMemory: true)
+        .modelContainer(for: [Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, BiometricLog.self, PhysiquePhoto.self], inMemory: true)
 }

@@ -19,7 +19,8 @@ struct The_Friendly_Fitness_Companion_V2App: App {
             UserSettings.self,
             FastingSession.self,
             WorkoutTemplate.self,
-            PhysiquePhoto.self
+            PhysiquePhoto.self,
+            BiometricLog.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
 

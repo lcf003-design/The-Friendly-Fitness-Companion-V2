@@ -117,7 +117,9 @@ struct MainTabView: View {
         ExerciseSet.self,
         UserSettings.self,
         FastingSession.self,
-        WorkoutTemplate.self
+        WorkoutTemplate.self,
+        PhysiquePhoto.self,
+        BiometricLog.self
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
