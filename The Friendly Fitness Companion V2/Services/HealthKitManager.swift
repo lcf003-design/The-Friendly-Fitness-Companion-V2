@@ -19,11 +19,14 @@ final class HealthKitManager {
         }
         
         let workoutType = HKObjectType.workoutType()
-        let energyType = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
+        let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
+        let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
+        let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
         
         let typesToShare: Set = [workoutType, energyType]
+        let typesToRead: Set = [hrvType, sleepType]
         
-        healthStore.requestAuthorization(toShare: typesToShare, read: nil) { success, error in
+        healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { success, error in
             DispatchQueue.main.async {
                 completion(success, error)
             }
@@ -83,5 +86,65 @@ final class HealthKitManager {
                 }
             }
         }
+    }
+    
+    func fetchLatestHRV(completion: @escaping (Double?, Error?) -> Void) {
+        guard isAvailable else {
+            completion(nil, nil)
+            return
+        }
+        
+        let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        
+        let query = HKSampleQuery(sampleType: hrvType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, error in
+            guard let sample = samples?.first as? HKQuantitySample else {
+                completion(nil, error)
+                return
+            }
+            let value = sample.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
+            DispatchQueue.main.async {
+                completion(value, nil)
+            }
+        }
+        healthStore.execute(query)
+    }
+    
+    func fetchLatestSleepHours(completion: @escaping (Double?, Error?) -> Void) {
+        guard isAvailable else {
+            completion(nil, nil)
+            return
+        }
+        
+        let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let startDate = calendar.date(byAdding: .day, value: -1, to: now)
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: now, options: .strictEndDate)
+        
+        let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { _, samples, error in
+            guard let sleepSamples = samples as? [HKCategorySample], !sleepSamples.isEmpty else {
+                completion(nil, error)
+                return
+            }
+            
+            var totalAsleepTime: TimeInterval = 0
+            for sample in sleepSamples {
+                if sample.value == HKCategoryValueSleepAnalysis.asleep.rawValue ||
+                    sample.value == HKCategoryValueSleepAnalysis.asleepCore.rawValue ||
+                    sample.value == HKCategoryValueSleepAnalysis.asleepDeep.rawValue ||
+                    sample.value == HKCategoryValueSleepAnalysis.asleepREM.rawValue {
+                    totalAsleepTime += sample.endDate.timeIntervalSince(sample.startDate)
+                }
+            }
+            
+            let hours = totalAsleepTime / 3600.0
+            DispatchQueue.main.async {
+                completion(hours > 0 ? hours : nil, nil)
+            }
+        }
+        healthStore.execute(query)
     }
 }

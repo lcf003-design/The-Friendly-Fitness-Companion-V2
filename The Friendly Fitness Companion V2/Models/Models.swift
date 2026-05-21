@@ -140,7 +140,11 @@ final class UserSettings {
     // Ghost Tracking
     var ghostTrackingPreference: Int = 0 // 0 = Most Recent, 1 = All-Time PR
     
-    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isOnboarded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0) {
+    // Recovery Telemetry Override
+    var isRecoveryOverridden: Bool = false
+    var manualRecoveryScore: Double = 0.8 // Default to 80%
+    
+    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isOnboarded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0, isRecoveryOverridden: Bool = false, manualRecoveryScore: Double = 0.8) {
         self.id = id
         self.userName = userName
         self.bodyWeight = bodyWeight
@@ -159,6 +163,9 @@ final class UserSettings {
         self.trainingAgeYears = trainingAgeYears
         self.currentPhase = currentPhase
         self.ghostTrackingPreference = ghostTrackingPreference
+        
+        self.isRecoveryOverridden = isRecoveryOverridden
+        self.manualRecoveryScore = manualRecoveryScore
     }
 }
 

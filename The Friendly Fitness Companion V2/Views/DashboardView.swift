@@ -10,6 +10,38 @@ struct DashboardView: View {
     @State private var selectedMuscle: String? = nil
     @State private var isShowingMuscleDetail = false
     
+    // HealthKit metrics states
+    @State private var liveHRV: Double? = nil
+    @State private var liveSleep: Double? = nil
+    @State private var isHealthKitAuthorized = false
+    
+    // Custom bindings for manual overrides
+    private var manualScoreBinding: Binding<Double> {
+        Binding(
+            get: {
+                userSettings.first?.manualRecoveryScore ?? 0.8
+            },
+            set: { newValue in
+                if let settings = userSettings.first {
+                    settings.manualRecoveryScore = newValue
+                }
+            }
+        )
+    }
+    
+    private var isOverriddenBinding: Binding<Bool> {
+        Binding(
+            get: {
+                userSettings.first?.isRecoveryOverridden ?? false
+            },
+            set: { newValue in
+                if let settings = userSettings.first {
+                    settings.isRecoveryOverridden = newValue
+                }
+            }
+        )
+    }
+    
     // Calculates the number of days since a specific muscle group was trained
     private var recoveryMap: [String: Int] {
         var map: [String: Int] = [:]
@@ -116,6 +148,59 @@ struct DashboardView: View {
         return totalPoints / muscles.count
     }
     
+    private var activeRecoveryScore: Int {
+        if let settings = userSettings.first, settings.isRecoveryOverridden {
+            return Int(settings.manualRecoveryScore * 100)
+        }
+        
+        let baseScore = Double(overallRecoveryScore)
+        var adjustedScore = baseScore
+        
+        if let hrv = liveHRV {
+            let hrvFactor = (hrv - 50.0) / 100.0
+            adjustedScore += hrvFactor * 25.0
+        }
+        
+        if let sleep = liveSleep {
+            let sleepFactor = (sleep - 8.0) / 8.0
+            adjustedScore += sleepFactor * 20.0
+        }
+        
+        return max(0, min(100, Int(adjustedScore)))
+    }
+    
+    private var coachInsight: CoachInsight {
+        let defaultSettings = UserSettings()
+        let settings = userSettings.first ?? defaultSettings
+        let score = Double(activeRecoveryScore) / 100.0
+        return AICoachService.shared.generateInsight(
+            sessions: recentSessions,
+            settings: settings,
+            recoveryScore: score
+        )
+    }
+    
+    private func loadHealthKitTelemetry() {
+        guard HealthKitManager.shared.isAvailable else { return }
+        
+        HealthKitManager.shared.requestAuthorization { success, _ in
+            guard success else { return }
+            isHealthKitAuthorized = true
+            
+            HealthKitManager.shared.fetchLatestHRV { hrv, _ in
+                if let hrv = hrv {
+                    self.liveHRV = hrv
+                }
+            }
+            
+            HealthKitManager.shared.fetchLatestSleepHours { sleep, _ in
+                if let sleep = sleep {
+                    self.liveSleep = sleep
+                }
+            }
+        }
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -138,9 +223,9 @@ struct DashboardView: View {
                                     .foregroundColor(Theme.textSecondary)
                                     .tracking(1.5)
                                 Spacer()
-                                Text("\(overallRecoveryScore)%")
+                                Text("\(activeRecoveryScore)%")
                                     .font(Theme.Typography.technical(12, weight: .black))
-                                    .foregroundColor(overallRecoveryScore > 75 ? Theme.apexGreen : (overallRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed))
+                                    .foregroundColor(activeRecoveryScore > 75 ? Theme.apexGreen : (activeRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed))
                             }
                             
                             // Visual bar
@@ -151,12 +236,68 @@ struct DashboardView: View {
                                         .frame(height: 8)
                                     
                                     RoundedRectangle(cornerRadius: 3)
-                                        .fill(overallRecoveryScore > 75 ? Theme.apexGreen : (overallRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed))
-                                        .frame(width: geo.size.width * CGFloat(Double(overallRecoveryScore) / 100.0), height: 8)
-                                        .shadow(color: (overallRecoveryScore > 75 ? Theme.apexGreen : (overallRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed)).opacity(0.5), radius: 3, x: 0, y: 0)
+                                        .fill(activeRecoveryScore > 75 ? Theme.apexGreen : (activeRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed))
+                                        .frame(width: geo.size.width * CGFloat(Double(activeRecoveryScore) / 100.0), height: 8)
+                                        .shadow(color: (activeRecoveryScore > 75 ? Theme.apexGreen : (activeRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed)).opacity(0.5), radius: 3, x: 0, y: 0)
                                 }
                             }
                             .frame(height: 8)
+                            
+                            // HealthKit / Manual override controls
+                            VStack(spacing: 12) {
+                                Divider().background(Theme.border.opacity(0.2))
+                                
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("HEALTHKIT TELEMETRY")
+                                            .font(Theme.Typography.technical(9, weight: .bold))
+                                            .foregroundColor(Theme.textSecondary)
+                                        
+                                        HStack(spacing: 12) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "heart.text.square.fill")
+                                                    .foregroundColor(Theme.dangerRed)
+                                                Text(liveHRV != nil ? "\(Int(liveHRV!)) ms" : "NO DATA")
+                                            }
+                                            
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "bed.double.fill")
+                                                    .foregroundColor(Theme.accent)
+                                                Text(liveSleep != nil ? String(format: "%.1f hrs", liveSleep!) : "NO DATA")
+                                            }
+                                        }
+                                        .font(Theme.Typography.technical(11, weight: .bold))
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Toggle(isOn: isOverriddenBinding) {
+                                        Text("OVERRIDE")
+                                            .font(Theme.Typography.technical(10, weight: .black))
+                                            .foregroundColor(isOverriddenBinding.wrappedValue ? Theme.accent : Theme.textSecondary)
+                                    }
+                                    .toggleStyle(SwitchToggleStyle(tint: Theme.accent))
+                                    .labelsHidden()
+                                }
+                                
+                                if isOverriddenBinding.wrappedValue {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack {
+                                            Text("MANUAL READINESS OVERRIDE:")
+                                                .font(Theme.Typography.technical(9, weight: .bold))
+                                                .foregroundColor(Theme.accent)
+                                            Spacer()
+                                            Text("\(Int(manualScoreBinding.wrappedValue * 100))%")
+                                                .font(Theme.Typography.technical(11, weight: .black))
+                                                .foregroundColor(Theme.accent)
+                                        }
+                                        
+                                        Slider(value: manualScoreBinding, in: 0.0...1.0, step: 0.05)
+                                            .accentColor(Theme.accent)
+                                    }
+                                }
+                            }
+                            .padding(.top, 4)
                         }
                         .padding()
                         .background(Theme.surface.opacity(0.5))
@@ -166,6 +307,10 @@ struct DashboardView: View {
                                 .stroke(Theme.border.opacity(0.15), lineWidth: 1)
                         )
                         .padding(.horizontal)
+                        
+                        // AI Coach Insights Panel
+                        AICoachWidgetView(insight: coachInsight)
+                            .padding(.horizontal)
                         
                         // Weekly Split Matrix
                         VStack(alignment: .leading, spacing: 10) {
@@ -308,6 +453,9 @@ struct DashboardView: View {
                     }
                     .padding(.vertical)
                 }
+                .onAppear {
+                    loadHealthKitTelemetry()
+                }
             }
             .navigationTitle("Dashboard")
             .navigationBarTitleDisplayMode(.inline)
@@ -355,6 +503,87 @@ struct DashboardView: View {
                 }
             }
         }
+    }
+}
+
+struct AICoachWidgetView: View {
+    let insight: CoachInsight
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(insight.capacityScore >= 80 ? Theme.apexGreen : (insight.capacityScore >= 50 ? Theme.warningOrange : Theme.dangerRed))
+                    .frame(width: 8, height: 8)
+                    .shadow(color: (insight.capacityScore >= 80 ? Theme.apexGreen : (insight.capacityScore >= 50 ? Theme.warningOrange : Theme.dangerRed)), radius: 4)
+                
+                Text("COACH CO-PILOT")
+                    .font(Theme.Typography.technical(12, weight: .bold))
+                    .foregroundColor(Theme.textPrimary)
+                    .tracking(2.0)
+                
+                Spacer()
+                
+                Text(insight.focusMuscle.uppercased() + " DAY")
+                    .font(Theme.Typography.technical(10, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Theme.accent.opacity(0.15))
+                    .cornerRadius(4)
+            }
+            
+            Text(insight.coachMessage)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white)
+                .lineSpacing(4)
+            
+            Divider().background(Theme.border.opacity(0.3))
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text("TODAY'S TARGET DIRECTIVES")
+                    .font(Theme.Typography.technical(10, weight: .bold))
+                    .foregroundColor(Theme.textSecondary)
+                    .tracking(1.0)
+                
+                ForEach(insight.trainingDirectives, id: \.self) { directive in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("•")
+                            .font(.headline)
+                            .foregroundColor(Theme.accent)
+                        Text(directive)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+            }
+            
+            Divider().background(Theme.border.opacity(0.3))
+            
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "bolt.shield.fill")
+                    .foregroundColor(Theme.warningOrange)
+                    .font(.system(size: 16))
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("PROGRESSIVE OVERLOAD INSTRUCTION")
+                        .font(Theme.Typography.technical(9, weight: .bold))
+                        .foregroundColor(Theme.warningOrange)
+                        .tracking(1.0)
+                    
+                    Text(insight.progressiveOverloadTip)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Theme.textPrimary)
+                }
+            }
+        }
+        .padding()
+        .background(Theme.surface)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Theme.border, lineWidth: 1)
+        )
     }
 }
 
