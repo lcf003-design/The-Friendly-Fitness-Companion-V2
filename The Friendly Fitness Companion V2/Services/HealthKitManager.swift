@@ -132,7 +132,7 @@ final class HealthKitManager {
             
             var totalAsleepTime: TimeInterval = 0
             for sample in sleepSamples {
-                if sample.value == HKCategoryValueSleepAnalysis.asleep.rawValue ||
+                if sample.value == HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue ||
                     sample.value == HKCategoryValueSleepAnalysis.asleepCore.rawValue ||
                     sample.value == HKCategoryValueSleepAnalysis.asleepDeep.rawValue ||
                     sample.value == HKCategoryValueSleepAnalysis.asleepREM.rawValue {

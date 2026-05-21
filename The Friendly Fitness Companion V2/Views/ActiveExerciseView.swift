@@ -357,8 +357,6 @@ struct ActiveExerciseView: View {
         
         // Generate 30 random particles
         for _ in 0..<30 {
-            let angle = Double.random(in: 0...(2 * .pi))
-            let speed = CGFloat.random(in: 30...120)
             let p = Particle(
                 x: 0,
                 y: 0,
