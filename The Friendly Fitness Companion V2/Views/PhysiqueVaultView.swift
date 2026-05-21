@@ -10,8 +10,12 @@ struct PhysiqueVaultView: View {
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var isProcessingPhoto = false
     
-    // Comparison State
-    @State private var isCompareMode = false
+    enum VaultTab: Int {
+        case gallery = 0
+        case compare = 1
+        case timelapse = 2
+    }
+    @State private var selectedTab = VaultTab.gallery
     @State private var photoOne: PhysiquePhoto? = nil
     @State private var photoTwo: PhysiquePhoto? = nil
     
@@ -22,30 +26,54 @@ struct PhysiqueVaultView: View {
             ZStack {
                 Theme.midnightMatte.ignoresSafeArea()
                 
-                if photos.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 64))
-                            .foregroundColor(Theme.textSecondary)
-                        Text("VAULT EMPTY")
-                            .font(Theme.Typography.technical(16, weight: .bold))
-                            .foregroundColor(Theme.textSecondary)
-                        Text("Log your first physique photo to start tracking visual progression.")
-                            .font(Theme.Typography.technical(14))
-                            .foregroundColor(Theme.textSecondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
+                VStack(spacing: 0) {
+                    if !photos.isEmpty {
+                        Picker("Vault Mode", selection: $selectedTab) {
+                            Text("GALLERY").tag(VaultTab.gallery)
+                            Text("COMPARE").tag(VaultTab.compare)
+                            Text("TIMELAPSE").tag(VaultTab.timelapse)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        .padding(.top, 12)
+                        .padding(.bottom, 16)
                     }
-                } else if isCompareMode {
-                    compareView
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(photos) { photo in
-                                vaultPhotoCell(photo)
+                    
+                    if photos.isEmpty {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 64))
+                                .foregroundColor(Theme.textSecondary)
+                            Text("VAULT EMPTY")
+                                .font(Theme.Typography.technical(16, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                            Text("Log your first physique photo to start tracking visual progression.")
+                                .font(Theme.Typography.technical(14))
+                                .foregroundColor(Theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+                        }
+                        Spacer()
+                    } else {
+                        switch selectedTab {
+                        case .gallery:
+                            ScrollView {
+                                LazyVGrid(columns: columns, spacing: 12) {
+                                    ForEach(photos) { photo in
+                                        vaultPhotoCell(photo)
+                                    }
+                                }
+                                .padding()
+                            }
+                        case .compare:
+                            compareView
+                        case .timelapse:
+                            ScrollView {
+                                TransformationTimelineView(photos: photos)
+                                    .padding()
                             }
                         }
-                        .padding()
                     }
                 }
                 
@@ -58,41 +86,21 @@ struct PhysiqueVaultView: View {
                     }
                 }
             }
-            .navigationTitle(isCompareMode ? "Compare Mode" : "Physique Vault")
+            .navigationTitle("Physique Vault")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    if isCompareMode {
-                        Button("Cancel") {
-                            isCompareMode = false
-                            photoOne = nil
-                            photoTwo = nil
-                        }
-                        .foregroundColor(Theme.textSecondary)
-                    } else {
-                        Button("Done") {
-                            isPresented = false
-                        }
-                        .foregroundColor(Theme.textSecondary)
+                    Button("Done") {
+                        isPresented = false
                     }
+                    .foregroundColor(Theme.textSecondary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if !isCompareMode && photos.count > 1 {
-                        Button(action: {
-                            isCompareMode = true
-                        }) {
-                            Image(systemName: "rectangle.split.2x1")
-                                .foregroundColor(Theme.accent)
-                        }
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if !isCompareMode {
+                    if selectedTab == .gallery {
                         PhotosPicker(selection: $selectedPhotoItem, matching: .images, photoLibrary: .shared()) {
                             Image(systemName: "plus")
                                 .font(.headline)
@@ -128,7 +136,7 @@ struct PhysiqueVaultView: View {
     
     private func vaultPhotoCell(_ photo: PhysiquePhoto) -> some View {
         Button(action: {
-            if isCompareMode {
+            if selectedTab == .compare {
                 // Ignore taps in compare mode if we are building the selection grid,
                 // but actually, we could let them select from here.
             } else {
@@ -207,16 +215,12 @@ struct PhysiqueVaultView: View {
                     .padding()
                 }
             } else {
-                // Side by Side View
-                HStack(spacing: 8) {
-                    if let p1 = photoOne {
-                        compareImageCell(p1, label: "BEFORE")
-                    }
-                    if let p2 = photoTwo {
-                        compareImageCell(p2, label: "AFTER")
-                    }
+                // Curtain Slider View
+                if let p1 = photoOne, let p2 = photoTwo {
+                    let sorted = [p1, p2].sorted(by: { $0.timestamp < $1.timestamp })
+                    BeforeAfterSliderView(photoBefore: sorted[0], photoAfter: sorted[1])
+                        .padding()
                 }
-                .padding()
                 
                 Spacer()
                 

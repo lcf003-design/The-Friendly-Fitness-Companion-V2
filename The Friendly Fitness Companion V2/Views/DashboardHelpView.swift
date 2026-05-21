@@ -35,9 +35,10 @@ struct DashboardHelpView: View {
                             color: Theme.accent,
                             content: [
                                 "This anatomical map visualizes your recovery state based on the muscle groups you've recently trained. **Tap any muscle node** to view its specific recovery status and recent exercises.",
+                                "**Concentric Pulsing Waves**: Nodes that are exhausted or recovering will pulse on the map to show active rebuilding status.",
+                                "**Recovery Wheel Gauge**: Inside the detail sheet, a custom 0-100% circular dial indicates the precise metabolic recovery state of the targeted muscle group.",
                                 "**Red/Orange (Active Damage)**: Muscle was trained within the last 48 hours. It is currently rebuilding.",
-                                "**Green (Recovered)**: Muscle has had adequate rest and is ready to be targeted again.",
-                                "*Tactical Note*: Do not hit a red zone. Let it heal."
+                                "**Green (Recovered)**: Muscle has had adequate rest and is ready to be targeted again."
                             ]
                         )
                         

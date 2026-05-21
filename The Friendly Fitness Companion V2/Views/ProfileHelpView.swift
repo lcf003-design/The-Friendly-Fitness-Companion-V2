@@ -28,7 +28,18 @@ struct ProfileHelpView: View {
                         )
                         
                         HelpSection(
-                            title: "2. The Settings Gear",
+                            title: "2. The Physique Vault",
+                            icon: "photo.on.rectangle.angled",
+                            color: Theme.accent,
+                            content: [
+                                "Track your visual transformation over time. Upload photos tagged with your bodyweight and training phase.",
+                                "Select any two photos to open the **Before/After Curtain Slider**. Drag the dividing slider handle back and forth to superimpose and compare changes.",
+                                "All photos are stored locally on your device for absolute privacy."
+                            ]
+                        )
+                        
+                        HelpSection(
+                            title: "3. The Settings Gear",
                             icon: "gearshape.fill",
                             color: Theme.textSecondary,
                             content: [

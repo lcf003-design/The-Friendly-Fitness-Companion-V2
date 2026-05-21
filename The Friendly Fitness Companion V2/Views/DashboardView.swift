@@ -67,6 +67,55 @@ struct DashboardView: View {
         return recentSessions.filter { $0.timestamp >= oneWeekAgo }.sorted { $0.timestamp < $1.timestamp }
     }
     
+    // Check if workouts were logged on specific days of the current week
+    private func workoutsForWeekdays() -> [(dayName: String, date: Date, hasWorkedOut: Bool)] {
+        let calendar = Calendar.current
+        let today = Date()
+        
+        // Find start of the current week (Monday)
+        guard let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: today)?.start else {
+            return []
+        }
+        
+        var days: [(dayName: String, date: Date, hasWorkedOut: Bool)] = []
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E" // "Mon", "Tue"
+        
+        for i in 0..<7 {
+            if let dayDate = calendar.date(byAdding: .day, value: i, to: startOfWeek) {
+                let dayName = formatter.string(from: dayDate).uppercased()
+                let sessionsOnDay = recentSessions.filter { calendar.isDate($0.timestamp, inSameDayAs: dayDate) }
+                days.append((
+                    dayName: String(dayName.first ?? " "),
+                    date: dayDate,
+                    hasWorkedOut: !sessionsOnDay.isEmpty
+                ))
+            }
+        }
+        return days
+    }
+    
+    private var overallRecoveryScore: Int {
+        let muscles = ["Abs", "Back", "Biceps", "Calves", "Chest", "Glutes", "Hamstrings", "Quads", "Shoulders", "Triceps"]
+        let recMap = recoveryMap
+        var totalPoints = 0
+        
+        for muscle in muscles {
+            if let days = recMap[muscle] {
+                if days < 2 {
+                    totalPoints += 30 // Exhausted
+                } else if days < 4 {
+                    totalPoints += 70 // Recovering
+                } else {
+                    totalPoints += 100 // Recovered
+                }
+            } else {
+                totalPoints += 100 // Untrained = fully rested
+            }
+        }
+        return totalPoints / muscles.count
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -80,6 +129,75 @@ struct DashboardView: View {
                             StatCard(title: "Workouts", value: "\(thisWeekWorkoutCount)", icon: "bolt.fill", color: Theme.accent)
                         }
                         .padding(.horizontal)
+                        
+                        // Recovery Energy Bar
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("SYSTEM RECOVERY LEVEL")
+                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                                    .tracking(1.5)
+                                Spacer()
+                                Text("\(overallRecoveryScore)%")
+                                    .font(Theme.Typography.technical(12, weight: .black))
+                                    .foregroundColor(overallRecoveryScore > 75 ? Theme.apexGreen : (overallRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed))
+                            }
+                            
+                            // Visual bar
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(Theme.surface)
+                                        .frame(height: 8)
+                                    
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(overallRecoveryScore > 75 ? Theme.apexGreen : (overallRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed))
+                                        .frame(width: geo.size.width * CGFloat(Double(overallRecoveryScore) / 100.0), height: 8)
+                                        .shadow(color: (overallRecoveryScore > 75 ? Theme.apexGreen : (overallRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed)).opacity(0.5), radius: 3, x: 0, y: 0)
+                                }
+                            }
+                            .frame(height: 8)
+                        }
+                        .padding()
+                        .background(Theme.surface.opacity(0.5))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Theme.border.opacity(0.15), lineWidth: 1)
+                        )
+                        .padding(.horizontal)
+                        
+                        // Weekly Split Matrix
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("WEEKLY SPLIT MATRIX")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .tracking(2)
+                                .padding(.horizontal)
+                            
+                            HStack(spacing: 8) {
+                                ForEach(workoutsForWeekdays(), id: \.date) { day in
+                                    VStack(spacing: 6) {
+                                        Text(day.dayName)
+                                            .font(Theme.Typography.technical(10, weight: .bold))
+                                            .foregroundColor(day.hasWorkedOut ? .black : Theme.textSecondary)
+                                        
+                                        Circle()
+                                            .fill(day.hasWorkedOut ? Theme.accent : Color.clear)
+                                            .frame(width: 6, height: 6)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(day.hasWorkedOut ? Theme.accent : Theme.surface)
+                                    .cornerRadius(6)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(day.hasWorkedOut ? Theme.accent : Theme.border.opacity(0.2), lineWidth: 1)
+                                    )
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
                         
                         // Anatomical Heatmap
                         VStack(alignment: .leading, spacing: 8) {

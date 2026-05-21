@@ -17,23 +17,34 @@ struct ProgressHelpView: View {
                             .padding(.bottom, 8)
                         
                         HelpSection(
-                            title: "1. The Chronological Ledger",
-                            icon: "clock.arrow.circlepath",
+                            title: "1. Grouped Workout Routines",
+                            icon: "folder.fill",
                             color: Theme.accent,
                             content: [
-                                "All your past grinds are recorded here, sorted from newest to oldest.",
-                                "Review the high-level Intensity Score and the number of exercises performed at a glance."
+                                "Your workouts are grouped by their unique name (e.g., Leg Day, Push Day).",
+                                "See the total grinds logged for each routine and your average intensity score at a glance."
                             ]
                         )
                         
                         HelpSection(
-                            title: "2. Session Drill-Down",
-                            icon: "magnifyingglass",
+                            title: "2. Trend Charts & Stats",
+                            icon: "chart.xyaxis.line",
                             color: Theme.warningOrange,
                             content: [
-                                "**Tap any session** to open its full Session Summary.",
-                                "You can review every single exact weight, rep, and set logged on that specific day.",
-                                "Use this log to remind yourself exactly what you need to beat today."
+                                "**Tap any routine** to open its dedicated progress dashboard.",
+                                "Analyze your Tonnage Volume and Intensity Score over time using interactive trend charts.",
+                                "Review tactical stats like Max Tonnage and Average Intensity to ensure progressive overload."
+                            ]
+                        )
+                        
+                        HelpSection(
+                            title: "3. Body Parts Progress",
+                            icon: "figure.strengthtraining.traditional",
+                            color: Theme.apexGreen,
+                            content: [
+                                "Switch to the **Body Parts** tab to track recovery and progress for each individual muscle group.",
+                                "See your last trained dates and status badges (Exhausted, Recovering, Recovered) at a glance.",
+                                "Tap any muscle group to open the complete **Recovery & Progress Dashboard** with recovery gauges and lift history."
                             ]
                         )
                     }

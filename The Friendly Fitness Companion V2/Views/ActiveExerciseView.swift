@@ -23,6 +23,9 @@ struct ActiveExerciseView: View {
     @State private var showPlateCalculator = false
     @State private var isShowingHelp = false
     
+    // Celebration Particle State
+    @State private var particles: [Particle] = []
+    
     init(workoutExercise: WorkoutExercise, isEditMode: Bool = true) {
         self.workoutExercise = workoutExercise
         self.isEditMode = isEditMode
@@ -170,7 +173,10 @@ struct ActiveExerciseView: View {
                                 ghostMaxWeight: ghostMaxWeight,
                                 tempoProfile: userSettings.first?.tempoProfile ?? "1-1-1",
                                 isEditMode: isEditMode,
-                                onComplete: { startTimer() },
+                                onComplete: { 
+                                    triggerBurst()
+                                    startTimer() 
+                                },
                                 onDelete: { deleteSet(exerciseSet) }
                             )
                         }
@@ -231,6 +237,20 @@ struct ActiveExerciseView: View {
                     }
                     .padding()
                 }
+            }
+            
+            // Particle celebration overlay
+            if !particles.isEmpty {
+                ZStack {
+                    ForEach(particles) { particle in
+                        Circle()
+                            .fill(particle.color)
+                            .frame(width: particle.size, height: particle.size)
+                            .offset(x: particle.x, y: particle.y)
+                            .opacity(particle.opacity)
+                    }
+                }
+                .ignoresSafeArea()
             }
         }
         .navigationTitle("The Grind")
@@ -331,6 +351,43 @@ struct ActiveExerciseView: View {
         isMetronomeActive = false
     }
     
+    private func triggerBurst() {
+        let colors: [Color] = [Theme.accent, Theme.warningOrange, Theme.apexGreen, .yellow, .white]
+        var newParticles: [Particle] = []
+        
+        // Generate 30 random particles
+        for _ in 0..<30 {
+            let angle = Double.random(in: 0...(2 * .pi))
+            let speed = CGFloat.random(in: 30...120)
+            let p = Particle(
+                x: 0,
+                y: 0,
+                color: colors.randomElement() ?? Theme.accent,
+                size: CGFloat.random(in: 4...10),
+                opacity: 1.0
+            )
+            newParticles.append(p)
+        }
+        
+        self.particles = newParticles
+        
+        // Animate dispersing and fading out
+        withAnimation(.easeOut(duration: 0.8)) {
+            for index in 0..<self.particles.count {
+                let angle = Double.random(in: 0...(2 * .pi))
+                let distance = CGFloat.random(in: 80...180)
+                self.particles[index].x = cos(angle) * distance
+                self.particles[index].y = sin(angle) * distance
+                self.particles[index].opacity = 0.0
+            }
+        }
+        
+        // Clear particles after animation finishes to release memory
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            self.particles.removeAll()
+        }
+    }
+    
     private func addSet() {
         let newSet = ExerciseSet(weight: 0.0, reps: 0)
         modelContext.insert(newSet)
@@ -346,6 +403,15 @@ struct ActiveExerciseView: View {
             HapticManager.shared.playHeavyImpact()
         }
     }
+}
+
+struct Particle: Identifiable {
+    let id = UUID()
+    var x: CGFloat
+    var y: CGFloat
+    var color: Color
+    var size: CGFloat
+    var opacity: Double
 }
 
 struct SetRowView: View {
@@ -401,35 +467,107 @@ struct SetRowView: View {
                     VStack(spacing: 6) {
                         // Top Row: Primary Metrics (Weight & Reps)
                         HStack(spacing: 8) {
-                            TextField("-", text: $weightString)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.center)
-                                .font(.title2.bold())
-                                .monospacedDigit()
-                                .foregroundColor((exerciseSet.weight > ghostMaxWeight && ghostMaxWeight > 0) ? Theme.warningOrange : Theme.textPrimary)
-                                .frame(height: 44)
-                                .background(Theme.surface)
-                                .cornerRadius(8)
-                                .disabled(!isEditMode)
-                                .onChange(of: weightString) { 
-                                    let newWeight = Double(weightString) ?? 0.0
-                                    if newWeight > ghostMaxWeight && exerciseSet.weight <= ghostMaxWeight && ghostMaxWeight > 0 {
-                                        HapticManager.shared.playPR()
+                            // Weight Column
+                            HStack(spacing: 0) {
+                                if isEditMode {
+                                    Button(action: {
+                                        let current = Double(weightString) ?? 0.0
+                                        let step = 2.5
+                                        let newVal = max(0, current - step)
+                                        weightString = String(format: "%g", newVal)
+                                        exerciseSet.weight = newVal
+                                        HapticManager.shared.playSelection()
+                                    }) {
+                                        Image(systemName: "minus")
+                                            .font(.caption.bold())
+                                            .foregroundColor(Theme.textSecondary)
+                                            .frame(width: 24, height: 44)
                                     }
-                                    exerciseSet.weight = newWeight 
                                 }
+                                
+                                TextField("-", text: $weightString)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.center)
+                                    .font(.title2.bold())
+                                    .monospacedDigit()
+                                    .foregroundColor((exerciseSet.weight > ghostMaxWeight && ghostMaxWeight > 0) ? Theme.warningOrange : Theme.textPrimary)
+                                    .frame(height: 44)
+                                    .disabled(!isEditMode)
+                                    .onChange(of: weightString) { 
+                                        let newWeight = Double(weightString) ?? 0.0
+                                        if newWeight > ghostMaxWeight && exerciseSet.weight <= ghostMaxWeight && ghostMaxWeight > 0 {
+                                            HapticManager.shared.playPR()
+                                        }
+                                        exerciseSet.weight = newWeight 
+                                    }
+                                
+                                if isEditMode {
+                                    Button(action: {
+                                        let current = Double(weightString) ?? 0.0
+                                        let step = 2.5
+                                        let newVal = current + step
+                                        weightString = String(format: "%g", newVal)
+                                        exerciseSet.weight = newVal
+                                        if newVal > ghostMaxWeight && current <= ghostMaxWeight && ghostMaxWeight > 0 {
+                                            HapticManager.shared.playPR()
+                                        } else {
+                                            HapticManager.shared.playSelection()
+                                        }
+                                    }) {
+                                        Image(systemName: "plus")
+                                            .font(.caption.bold())
+                                            .foregroundColor(Theme.textSecondary)
+                                            .frame(width: 24, height: 44)
+                                    }
+                                }
+                            }
+                            .background(Theme.surface)
+                            .cornerRadius(8)
                             
-                            TextField("-", text: $repsString)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .font(.title2.bold())
-                                .monospacedDigit()
-                                .foregroundColor(Theme.textPrimary)
-                                .frame(height: 44)
-                                .background(Theme.surface)
-                                .cornerRadius(8)
-                                .disabled(!isEditMode)
-                                .onChange(of: repsString) { exerciseSet.reps = Int(repsString) ?? 0 }
+                            // Reps Column
+                            HStack(spacing: 0) {
+                                if isEditMode {
+                                    Button(action: {
+                                        let current = Int(repsString) ?? 0
+                                        let newVal = max(0, current - 1)
+                                        repsString = String(newVal)
+                                        exerciseSet.reps = newVal
+                                        HapticManager.shared.playSelection()
+                                    }) {
+                                        Image(systemName: "minus")
+                                            .font(.caption.bold())
+                                            .foregroundColor(Theme.textSecondary)
+                                            .frame(width: 24, height: 44)
+                                    }
+                                }
+                                
+                                TextField("-", text: $repsString)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.center)
+                                    .font(.title2.bold())
+                                    .monospacedDigit()
+                                    .foregroundColor(Theme.textPrimary)
+                                    .frame(height: 44)
+                                    .disabled(!isEditMode)
+                                    .onChange(of: repsString) { exerciseSet.reps = Int(repsString) ?? 0 }
+                                
+                                if isEditMode {
+                                    Button(action: {
+                                        let current = Int(repsString) ?? 0
+                                        let newVal = current + 1
+                                        repsString = String(newVal)
+                                        exerciseSet.reps = newVal
+                                        HapticManager.shared.playSelection()
+                                    }) {
+                                        Image(systemName: "plus")
+                                            .font(.caption.bold())
+                                            .foregroundColor(Theme.textSecondary)
+                                            .frame(width: 24, height: 44)
+                                    }
+                                }
+                            }
+                            .background(Theme.surface)
+                            .cornerRadius(8)
                         }
                         
                         // Middle Row: Inroad Gauge
@@ -537,7 +675,7 @@ struct SetRowView: View {
                         }
                         .disabled(!isEditMode)
                     }
-                    .frame(width: 120, height: 44, alignment: .center)
+                    .frame(width: 136, height: 44, alignment: .center)
                 }
                 
                 // NOTES ROW
@@ -685,9 +823,13 @@ struct PlateCalculatorPopover: View {
                     .font(Theme.Typography.technical(18, weight: .bold))
                     .foregroundColor(Theme.textPrimary)
                 
-                Text("BAR: \(unit == "kg" ? 20 : 45) \(unit)")
+                Text("BAR: \(unit == "kg" ? 20 : 45) \(unit) + SLEEVE CONFIGURATION")
                     .font(Theme.Typography.technical(12))
                     .foregroundColor(Theme.textSecondary)
+                
+                // Graphical Barbell Loading display
+                BarbellVisualizerView(plates: plates, unit: unit)
+                    .padding(.horizontal)
                 
                 if plates.isEmpty {
                     Text("Bar only.")

@@ -114,22 +114,49 @@ struct GlowingNode: View {
     let size: CGFloat
     var onNodeTap: ((String) -> Void)?
     
+    @State private var animatePulse = false
+    
     var body: some View {
-        let color = colorForRecovery(days: state[muscleName])
+        let days = state[muscleName]
+        let color = colorForRecovery(days: days)
+        let isRecoveringOrExhausted = days != nil && days! < 4
         
-        Circle()
-            .fill(color)
-            .frame(width: size, height: size)
-            .shadow(color: color.opacity(0.6), radius: 10, x: 0, y: 0) // The "Glow"
-            .overlay(
+        ZStack {
+            if isRecoveringOrExhausted {
+                // Expanding ripple ring 1
                 Circle()
-                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
-            )
-            // Add a subtle pulse animation if recovering/danger
-            .opacity(color == Theme.apexGreen ? 0.8 : 1.0)
-            .onTapGesture {
-                onNodeTap?(muscleName)
+                    .stroke(color.opacity(0.8), lineWidth: 1.5)
+                    .frame(width: size * 2.2, height: size * 2.2)
+                    .scaleEffect(animatePulse ? 1.0 : 0.4)
+                    .opacity(animatePulse ? 0.0 : 1.0)
+                
+                // Expanding ripple ring 2
+                Circle()
+                    .stroke(color.opacity(0.5), lineWidth: 1.0)
+                    .frame(width: size * 1.6, height: size * 1.6)
+                    .scaleEffect(animatePulse ? 1.0 : 0.5)
+                    .opacity(animatePulse ? 0.0 : 0.8)
             }
+            
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+                .shadow(color: color.opacity(0.6), radius: 10, x: 0, y: 0) // The "Glow"
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
+        }
+        .onAppear {
+            if isRecoveringOrExhausted {
+                withAnimation(Animation.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
+                    animatePulse = true
+                }
+            }
+        }
+        .onTapGesture {
+            onNodeTap?(muscleName)
+        }
     }
     
     private func colorForRecovery(days: Int?) -> Color {
