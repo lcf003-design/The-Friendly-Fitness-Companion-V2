@@ -45,7 +45,7 @@ struct ExerciseSelectionView: View {
                     
                     List {
                         ForEach(groupedExercises.keys.sorted(), id: \.self) { muscle in
-                            Section(header: Text(muscle.uppercased()).font(Theme.Typography.technical(12, weight: .bold)).foregroundColor(Theme.accent)) {
+                            Section(header: Text(muscle).font(Theme.Typography.technical(12, weight: .bold)).foregroundColor(Theme.accent)) {
                                 ForEach(groupedExercises[muscle] ?? []) { exercise in
                                     Button(action: {
                                         onSelect(exercise)
@@ -101,7 +101,7 @@ struct ExerciseSelectionView: View {
                 }
             }
             .sheet(isPresented: $isShowingAddSheet) {
-                AddExerciseSheet()
+                CustomExerciseCreationSheet()
             }
             .sheet(isPresented: $isShowingHelp) {
                 ExerciseSelectionHelpView()
@@ -129,4 +129,94 @@ struct ExerciseSelectionView: View {
     
     return ExerciseSelectionView { _ in }
         .modelContainer(container)
+}
+
+struct CustomExerciseCreationSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    
+    @State private var name = ""
+    @State private var targetMuscle = "Chest"
+    @State private var notes = ""
+    @State private var restTimeSeconds = 120
+    
+    let muscles = MuscleGroup.all
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.midnightMatte.ignoresSafeArea()
+                
+                Form {
+                    Section(header: Text("Exercise Identification").font(Theme.Typography.technical(10, weight: .bold)).foregroundColor(Theme.textSecondary)) {
+                        TextField("Exercise Name (e.g. Incline Bench)", text: $name)
+                            .foregroundColor(Theme.textPrimary)
+                            .listRowBackground(Theme.surface)
+                        
+                        Picker("Target Muscle", selection: $targetMuscle) {
+                            ForEach(muscles, id: \.self) { muscle in
+                                Text(muscle).tag(muscle)
+                            }
+                        }
+                        .foregroundColor(Theme.textPrimary)
+                        .listRowBackground(Theme.surface)
+                        .pickerStyle(.menu)
+                    }
+                    
+                    Section(header: Text("Rest Parameters").font(Theme.Typography.technical(10, weight: .bold)).foregroundColor(Theme.textSecondary)) {
+                        Stepper(value: $restTimeSeconds, in: 30...600, step: 30) {
+                            Text("Default Rest: \(restTimeSeconds)s (\(restTimeSeconds / 60)m)")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textPrimary)
+                        }
+                        .listRowBackground(Theme.surface)
+                    }
+                    
+                    Section(header: Text("Notes").font(Theme.Typography.technical(10, weight: .bold)).foregroundColor(Theme.textSecondary)) {
+                        TextField("Execution tips, equipment setup...", text: $notes)
+                            .foregroundColor(Theme.textPrimary)
+                            .listRowBackground(Theme.surface)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Create Custom Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Theme.textSecondary)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Create") {
+                        createExercise()
+                    }
+                    .foregroundColor(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Theme.textSecondary : Theme.accent)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+    
+    private func createExercise() {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        
+        let newExercise = Exercise(
+            name: trimmedName,
+            targetMuscle: targetMuscle,
+            notes: notes.isEmpty ? nil : notes,
+            defaultRestTime: restTimeSeconds
+        )
+        
+        modelContext.insert(newExercise)
+        try? modelContext.save()
+        
+        HapticManager.shared.playSuccess()
+        dismiss()
+    }
 }

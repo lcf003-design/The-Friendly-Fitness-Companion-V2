@@ -20,7 +20,7 @@ struct TemplateBuilderView: View {
                     
                     // Name Input
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("ROUTINE NAME")
+                        Text("Routine Name")
                             .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.textSecondary)
                         
@@ -36,7 +36,7 @@ struct TemplateBuilderView: View {
                     
                     // Exercise List
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("TARGET EXERCISES")
+                        Text("Target Exercises")
                             .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.textSecondary)
                             .padding(.horizontal)
@@ -62,7 +62,7 @@ struct TemplateBuilderView: View {
                                             .font(.headline)
                                             .foregroundColor(Theme.textPrimary)
                                         Spacer()
-                                        Text(exercise.targetMuscle.uppercased())
+                                        Text(exercise.targetMuscle)
                                             .font(Theme.Typography.technical(10, weight: .bold))
                                             .foregroundColor(Theme.accent)
                                             .padding(.horizontal, 8)
@@ -88,7 +88,7 @@ struct TemplateBuilderView: View {
                     }) {
                         HStack {
                             Image(systemName: "plus")
-                            Text("ADD EXERCISE")
+                            Text("Add Exercise")
                         }
                         .font(Theme.Typography.technical(16, weight: .bold))
                         .foregroundColor(Theme.textPrimary)
@@ -186,7 +186,7 @@ struct TemplateExerciseSelectionView: View {
                 
                 List {
                     ForEach(groupedExercises.keys.sorted(), id: \.self) { muscle in
-                        Section(header: Text(muscle.uppercased()).foregroundColor(Theme.accent).font(Theme.Typography.technical(12, weight: .bold))) {
+                        Section(header: Text(muscle).foregroundColor(Theme.accent).font(Theme.Typography.technical(12, weight: .bold))) {
                             ForEach(groupedExercises[muscle] ?? []) { exercise in
                                 TemplateExerciseRow(exercise: exercise) {
                                     selectedExercises.append(exercise)

@@ -43,7 +43,7 @@ struct ExerciseHistoryView: View {
                 VStack(spacing: 16) {
                     HStack(spacing: 16) {
                         VStack(alignment: .center, spacing: 4) {
-                            Text("ALL-TIME MAX")
+                            Text("All-Time Max")
                                 .font(Theme.Typography.technical(10, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                             Text(allTimeMax > 0 ? "\(allTimeMax, specifier: "%.1f")" : "---")
@@ -59,7 +59,7 @@ struct ExerciseHistoryView: View {
                         .cornerRadius(12)
                         
                         VStack(alignment: .center, spacing: 4) {
-                            Text("EST 1-REP MAX")
+                            Text("Est 1-Rep Max")
                                 .font(Theme.Typography.technical(10, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                             Text(estimated1RM > 0 ? "\(estimated1RM, specifier: "%.1f")" : "---")

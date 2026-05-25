@@ -56,7 +56,7 @@ struct ExerciseManagerView: View {
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets())
                     } header: {
-                        Text("THE ORACLE (EST 1RM)")
+                        Text("Projected Peak Lifts (Est. 1RM)")
                             .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.warningOrange)
                             .tracking(1)
@@ -73,7 +73,7 @@ struct ExerciseManagerView: View {
                                 deleteExercises(at: indexSet, in: muscle)
                             }
                         } header: {
-                            Text(muscle.uppercased())
+                            Text(muscle)
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.accent)
                                 .tracking(1)
@@ -134,7 +134,7 @@ struct PRCard: View {
             Text(max1RM > 0 ? "\(max1RM, specifier: "%.1f")" : "---")
                 .font(.system(size: 24, weight: .black, design: .rounded))
                 .foregroundColor(Theme.textPrimary)
-            Text(unit.uppercased())
+            Text(unit)
                 .font(Theme.Typography.technical(10, weight: .bold))
                 .foregroundColor(Theme.accent)
         }
@@ -179,7 +179,7 @@ struct AddExerciseSheet: View {
     @State private var notes: String = ""
     
     let muscleGroups = [
-        "Chest", "Back", "Shoulders", "Arms", "Lats", "Core", "Quads", "Hamstrings", "Calves", "Glutes", "Full Body"
+        "Chest", "Back", "Shoulders", "Biceps", "Triceps", "Arms", "Lats", "Core", "Quads", "Hamstrings", "Calves", "Glutes", "Full Body", "Cardio"
     ]
     
     var body: some View {
@@ -191,7 +191,7 @@ struct AddExerciseSheet: View {
                     VStack(spacing: 24) {
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("EXERCISE NAME")
+                            Text("Exercise Name")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                             
@@ -204,7 +204,7 @@ struct AddExerciseSheet: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("TARGET MUSCLE")
+                            Text("Target Muscle")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                             
@@ -220,7 +220,7 @@ struct AddExerciseSheet: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("COACHING CUES (OPTIONAL)")
+                            Text("Coaching Cues (Optional)")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                             

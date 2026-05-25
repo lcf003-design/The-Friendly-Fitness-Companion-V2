@@ -2,7 +2,13 @@ import SwiftUI
 import SwiftData
 
 struct AnatomicalBodyMap: View {
-    var muscleRecoveryState: [String: Int]
+    enum HeatmapMode {
+        case recovery
+        case activation
+    }
+    
+    var mode: HeatmapMode = .recovery
+    var muscleState: [String: Int]
     var onNodeTap: ((String) -> Void)?
     
     var body: some View {
@@ -18,33 +24,40 @@ struct AnatomicalBodyMap: View {
                     let height = geometry.size.height
                     
                     ZStack {
-                        // Head
-                        Circle().fill(Theme.border).frame(width: width * 0.12, height: width * 0.12).position(x: width * 0.5, y: height * 0.15)
+                        // Sci-Fi HUD Wireframe Body Outline
+                        BodyOutline(isFront: true)
+                        
+                        // Head Node (HUD style outline)
+                        Circle()
+                            .stroke(Theme.border, lineWidth: 2)
+                            .background(Circle().fill(Theme.midnightMatte.opacity(0.8)))
+                            .frame(width: width * 0.12, height: width * 0.12)
+                            .position(x: width * 0.5, y: height * 0.15)
                         
                         // Shoulders
-                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Shoulders", state: muscleState, mode: mode, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.3, y: height * 0.32)
-                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Shoulders", state: muscleState, mode: mode, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.7, y: height * 0.32)
                         
                         // Chest (Large Center)
-                        GlowingNode(muscleName: "Chest", state: muscleRecoveryState, size: width * 0.22, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Chest", state: muscleState, mode: mode, size: width * 0.22, onNodeTap: onNodeTap)
                             .position(x: width * 0.5, y: height * 0.38)
                             
-                        // Arms
-                        GlowingNode(muscleName: "Arms", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
+                        // Biceps
+                        GlowingNode(muscleName: "Biceps", state: muscleState, mode: mode, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.18, y: height * 0.52)
-                        GlowingNode(muscleName: "Arms", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Biceps", state: muscleState, mode: mode, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.82, y: height * 0.52)
                         
                         // Abs
-                        GlowingNode(muscleName: "Abs", state: muscleRecoveryState, size: width * 0.15, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Abs", state: muscleState, mode: mode, size: width * 0.15, onNodeTap: onNodeTap)
                             .position(x: width * 0.5, y: height * 0.58)
                             
                         // Quads
-                        GlowingNode(muscleName: "Quads", state: muscleRecoveryState, size: width * 0.16, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Quads", state: muscleState, mode: mode, size: width * 0.16, onNodeTap: onNodeTap)
                             .position(x: width * 0.38, y: height * 0.78)
-                        GlowingNode(muscleName: "Quads", state: muscleRecoveryState, size: width * 0.16, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Quads", state: muscleState, mode: mode, size: width * 0.16, onNodeTap: onNodeTap)
                             .position(x: width * 0.62, y: height * 0.78)
                     }
                 }
@@ -61,43 +74,48 @@ struct AnatomicalBodyMap: View {
                     let height = geometry.size.height
                     
                     ZStack {
-                        // Head
-                        Circle().fill(Theme.border).frame(width: width * 0.12, height: width * 0.12).position(x: width * 0.5, y: height * 0.15)
+                        // Sci-Fi HUD Wireframe Body Outline
+                        BodyOutline(isFront: false)
+                        
+                        // Head Node (HUD style outline)
+                        Circle()
+                            .stroke(Theme.border, lineWidth: 2)
+                            .background(Circle().fill(Theme.midnightMatte.opacity(0.8)))
+                            .frame(width: width * 0.12, height: width * 0.12)
+                            .position(x: width * 0.5, y: height * 0.15)
                         
                         // Shoulders (Rear Delts)
-                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Shoulders", state: muscleState, mode: mode, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.3, y: height * 0.32)
-                        GlowingNode(muscleName: "Shoulders", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Shoulders", state: muscleState, mode: mode, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.7, y: height * 0.32)
                         
                         // Back (Upper/Mid Back - Large Center)
-                        GlowingNode(muscleName: "Back", state: muscleRecoveryState, size: width * 0.22, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Back", state: muscleState, mode: mode, size: width * 0.22, onNodeTap: onNodeTap)
                             .position(x: width * 0.5, y: height * 0.38)
                             
                         // Triceps
-                        GlowingNode(muscleName: "Triceps", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Triceps", state: muscleState, mode: mode, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.18, y: height * 0.52)
-                        GlowingNode(muscleName: "Triceps", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Triceps", state: muscleState, mode: mode, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.82, y: height * 0.52)
                         
-                        // Lats (Combined into Back for this view)
-                            
                         // Glutes
-                        GlowingNode(muscleName: "Glutes", state: muscleRecoveryState, size: width * 0.14, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Glutes", state: muscleState, mode: mode, size: width * 0.14, onNodeTap: onNodeTap)
                             .position(x: width * 0.38, y: height * 0.65)
-                        GlowingNode(muscleName: "Glutes", state: muscleRecoveryState, size: width * 0.14, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Glutes", state: muscleState, mode: mode, size: width * 0.14, onNodeTap: onNodeTap)
                             .position(x: width * 0.62, y: height * 0.65)
                             
                         // Hamstrings
-                        GlowingNode(muscleName: "Hamstrings", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Hamstrings", state: muscleState, mode: mode, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.38, y: height * 0.78)
-                        GlowingNode(muscleName: "Hamstrings", state: muscleRecoveryState, size: width * 0.12, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Hamstrings", state: muscleState, mode: mode, size: width * 0.12, onNodeTap: onNodeTap)
                             .position(x: width * 0.62, y: height * 0.78)
                             
                         // Calves
-                        GlowingNode(muscleName: "Calves", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Calves", state: muscleState, mode: mode, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.38, y: height * 0.90)
-                        GlowingNode(muscleName: "Calves", state: muscleRecoveryState, size: width * 0.1, onNodeTap: onNodeTap)
+                        GlowingNode(muscleName: "Calves", state: muscleState, mode: mode, size: width * 0.1, onNodeTap: onNodeTap)
                             .position(x: width * 0.62, y: height * 0.90)
                     }
                 }
@@ -108,71 +126,193 @@ struct AnatomicalBodyMap: View {
     }
 }
 
+struct BodySilhouette: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        
+        // Neck L
+        path.move(to: CGPoint(x: w * 0.45, y: h * 0.26))
+        
+        // Shoulder L
+        path.addLine(to: CGPoint(x: w * 0.30, y: h * 0.30))
+        path.addLine(to: CGPoint(x: w * 0.24, y: h * 0.34))
+        
+        // Arm L outer
+        path.addLine(to: CGPoint(x: w * 0.20, y: h * 0.48))
+        path.addLine(to: CGPoint(x: w * 0.16, y: h * 0.62))
+        
+        // Hand L bottom
+        path.addLine(to: CGPoint(x: w * 0.20, y: h * 0.62))
+        
+        // Arm L inner
+        path.addLine(to: CGPoint(x: w * 0.24, y: h * 0.48))
+        path.addLine(to: CGPoint(x: w * 0.31, y: h * 0.36))
+        
+        // Torso L
+        path.addLine(to: CGPoint(x: w * 0.34, y: h * 0.48))
+        path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.65))
+        
+        // Leg L outer
+        path.addLine(to: CGPoint(x: w * 0.34, y: h * 0.78))
+        path.addLine(to: CGPoint(x: w * 0.35, y: h * 0.90))
+        path.addLine(to: CGPoint(x: w * 0.41, y: h * 0.92))
+        
+        // Leg L inner
+        path.addLine(to: CGPoint(x: w * 0.42, y: h * 0.78))
+        path.addLine(to: CGPoint(x: w * 0.48, y: h * 0.68))
+        path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.68))
+        
+        // Leg R inner
+        path.addLine(to: CGPoint(x: w * 0.52, y: h * 0.68))
+        path.addLine(to: CGPoint(x: w * 0.58, y: h * 0.78))
+        path.addLine(to: CGPoint(x: w * 0.59, y: h * 0.92))
+        
+        // Leg R outer
+        path.addLine(to: CGPoint(x: w * 0.65, y: h * 0.90))
+        path.addLine(to: CGPoint(x: w * 0.66, y: h * 0.78))
+        path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.65))
+        
+        // Torso R
+        path.addLine(to: CGPoint(x: w * 0.66, y: h * 0.48))
+        path.addLine(to: CGPoint(x: w * 0.69, y: h * 0.36))
+        
+        // Arm R inner
+        path.addLine(to: CGPoint(x: w * 0.76, y: h * 0.48))
+        path.addLine(to: CGPoint(x: w * 0.80, y: h * 0.62))
+        
+        // Hand R bottom
+        path.addLine(to: CGPoint(x: w * 0.84, y: h * 0.62))
+        
+        // Arm R outer
+        path.addLine(to: CGPoint(x: w * 0.80, y: h * 0.48))
+        path.addLine(to: CGPoint(x: w * 0.76, y: h * 0.34))
+        
+        // Shoulder R
+        path.addLine(to: CGPoint(x: w * 0.70, y: h * 0.30))
+        path.addLine(to: CGPoint(x: w * 0.55, y: h * 0.26))
+        
+        path.closeSubpath()
+        
+        return path
+    }
+}
+
+struct BodyOutline: View {
+    let isFront: Bool
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let w = geometry.size.width
+            let h = geometry.size.height
+            
+            ZStack {
+                // Filled solid body silhouette
+                BodySilhouette()
+                    .fill(Theme.border.opacity(0.35))
+                
+                // Fine elegant stroke outline
+                BodySilhouette()
+                    .stroke(Theme.border, lineWidth: 1.5)
+                
+                // Interior details
+                Path { path in
+                    if isFront {
+                        // Chest outline
+                        path.move(to: CGPoint(x: w * 0.36, y: h * 0.35))
+                        path.addLine(to: CGPoint(x: w * 0.48, y: h * 0.38))
+                        path.addLine(to: CGPoint(x: w * 0.48, y: h * 0.45))
+                        
+                        path.move(to: CGPoint(x: w * 0.64, y: h * 0.35))
+                        path.addLine(to: CGPoint(x: w * 0.52, y: h * 0.38))
+                        path.addLine(to: CGPoint(x: w * 0.52, y: h * 0.45))
+                        
+                        // Abs line
+                        path.move(to: CGPoint(x: w * 0.44, y: h * 0.51))
+                        path.addLine(to: CGPoint(x: w * 0.56, y: h * 0.51))
+                        
+                        path.move(to: CGPoint(x: w * 0.43, y: h * 0.58))
+                        path.addLine(to: CGPoint(x: w * 0.57, y: h * 0.58))
+                        
+                        path.move(to: CGPoint(x: w * 0.44, y: h * 0.64))
+                        path.addLine(to: CGPoint(x: w * 0.56, y: h * 0.64))
+                    } else {
+                        // Spine center
+                        path.move(to: CGPoint(x: w * 0.5, y: h * 0.26))
+                        path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.65))
+                        
+                        // Lats / Shoulders
+                        path.move(to: CGPoint(x: w * 0.34, y: h * 0.36))
+                        path.addLine(to: CGPoint(x: w * 0.48, y: h * 0.44))
+                        
+                        path.move(to: CGPoint(x: w * 0.66, y: h * 0.36))
+                        path.addLine(to: CGPoint(x: w * 0.52, y: h * 0.44))
+                        
+                        // Glutes divider
+                        path.move(to: CGPoint(x: w * 0.5, y: h * 0.66))
+                        path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.74))
+                    }
+                }
+                .stroke(Theme.border.opacity(0.65), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            }
+        }
+    }
+}
+
 struct GlowingNode: View {
     let muscleName: String
     let state: [String: Int]
+    let mode: AnatomicalBodyMap.HeatmapMode
     let size: CGFloat
     var onNodeTap: ((String) -> Void)?
     
-    @State private var animatePulse = false
-    
     var body: some View {
-        let days = state[muscleName]
-        let color = colorForRecovery(days: days)
-        let isRecoveringOrExhausted = days != nil && days! < 4
+        let value = state[muscleName]
+        let color = colorForState(value: value)
         
-        ZStack {
-            if isRecoveringOrExhausted {
-                // Expanding ripple ring 1
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .shadow(color: color.opacity(0.35), radius: 6, x: 0, y: 3)
+            .overlay(
                 Circle()
-                    .stroke(color.opacity(0.8), lineWidth: 1.5)
-                    .frame(width: size * 2.2, height: size * 2.2)
-                    .scaleEffect(animatePulse ? 1.0 : 0.4)
-                    .opacity(animatePulse ? 0.0 : 1.0)
-                
-                // Expanding ripple ring 2
-                Circle()
-                    .stroke(color.opacity(0.5), lineWidth: 1.0)
-                    .frame(width: size * 1.6, height: size * 1.6)
-                    .scaleEffect(animatePulse ? 1.0 : 0.5)
-                    .opacity(animatePulse ? 0.0 : 0.8)
+                    .stroke(Color.white, lineWidth: 1.5)
+            )
+            .onTapGesture {
+                onNodeTap?(muscleName)
             }
-            
-            Circle()
-                .fill(color)
-                .frame(width: size, height: size)
-                .shadow(color: color.opacity(0.6), radius: 10, x: 0, y: 0) // The "Glow"
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                )
-        }
-        .onAppear {
-            if isRecoveringOrExhausted {
-                withAnimation(Animation.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                    animatePulse = true
-                }
-            }
-        }
-        .onTapGesture {
-            onNodeTap?(muscleName)
-        }
     }
     
-    private func colorForRecovery(days: Int?) -> Color {
-        guard let days = days else { return Theme.apexGreen } // Untrained = Fresh
-        if days < 2 { return Theme.dangerRed } // Exhausted
-        if days < 4 { return Theme.warningOrange } // Recovering
-        return Theme.apexGreen // Fully Recovered
+    private func colorForState(value: Int?) -> Color {
+        guard let val = value else {
+            switch mode {
+            case .recovery:
+                return Theme.apexGreen // Fresh
+            case .activation:
+                return Theme.border.opacity(0.5) // Untrained / inactive
+            }
+        }
+        
+        switch mode {
+        case .recovery:
+            if val < 2 { return Theme.dangerRed } // Exhausted
+            if val < 4 { return Theme.warningOrange } // Recovering
+            return Theme.apexGreen // Fully Recovered
+        case .activation:
+            if val < 4 { return Theme.border.opacity(0.5) }
+            if val < 10 { return Theme.warningOrange }
+            return Theme.apexGreen
+        }
     }
 }
 
 #Preview {
-    AnatomicalBodyMap(muscleRecoveryState: [
+    AnatomicalBodyMap(mode: .recovery, muscleState: [
         "Chest": 1,
         "Abs": 3,
         "Quads": 5,
-        "Arms": 0
+        "Biceps": 0
     ])
     .padding()
     .background(Theme.midnightMatte)

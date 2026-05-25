@@ -30,15 +30,15 @@ struct DashboardHelpView: View {
                         
                         // Section 2
                         HelpSection(
-                            title: "2. The Recovery Heatmap",
+                            title: "2. The Anatomical Heatmap",
                             icon: "figure.walk",
                             color: Theme.accent,
                             content: [
-                                "This anatomical map visualizes your recovery state based on the muscle groups you've recently trained. **Tap any muscle node** to view its specific recovery status and recent exercises.",
-                                "**Concentric Pulsing Waves**: Nodes that are exhausted or recovering will pulse on the map to show active rebuilding status.",
-                                "**Recovery Wheel Gauge**: Inside the detail sheet, a custom 0-100% circular dial indicates the precise metabolic recovery state of the targeted muscle group.",
-                                "**Red/Orange (Active Damage)**: Muscle was trained within the last 48 hours. It is currently rebuilding.",
-                                "**Green (Recovered)**: Muscle has had adequate rest and is ready to be targeted again."
+                                "Visualize training status directly over a high-tech vector blueprint of the human body.",
+                                "**Dual Heatmap Modes**: Toggle between **Recovery** (days since trained: red/orange/green) and **Activation** (weekly sets completed: gray/orange/green).",
+                                "**Recovery Mode**: Displays damaged, active, or recovered states. Concentric pulsing waves show muscles actively rebuilding.",
+                                "**Activation Mode**: Tracks accumulated weekly set volume. Fades under-stimulated muscles (<4 sets), highlights moderate volume (4-9 sets), and triggers neon green pulsing waves on fully-stimulated muscles (10+ sets) to show high metabolic training heat.",
+                                "**Immersive Taps**: Tap any muscle node directly on the front or back blueprint silhouette to open the detailed metrics page, featuring a circular recovery dial, active stats, and historical lifts."
                             ]
                         )
                         
@@ -95,7 +95,7 @@ struct HelpSection: View {
                 Image(systemName: icon)
                     .foregroundColor(color)
                     .font(.title3)
-                Text(title.uppercased())
+                Text(title)
                     .font(Theme.Typography.technical(14, weight: .bold))
                     .foregroundColor(Theme.textPrimary)
                     .tracking(1)

@@ -28,13 +28,14 @@ struct ProfileHelpView: View {
                         )
                         
                         HelpSection(
-                            title: "2. The Physique Vault",
+                            title: "2. The Physique Vault & Biometrics",
                             icon: "photo.on.rectangle.angled",
                             color: Theme.accent,
                             content: [
                                 "Track your visual transformation over time. Upload photos tagged with your bodyweight and training phase.",
                                 "Select any two photos to open the **Before/After Curtain Slider**. Drag the dividing slider handle back and forth to superimpose and compare changes.",
-                                "All photos are stored locally on your device for absolute privacy."
+                                "**Biometric Logs**: Log body weight and body fat tracking points over time. View interactive progression and history charts directly on your profile.",
+                                "All photos and data are stored locally on your device for absolute privacy."
                             ]
                         )
                         
@@ -44,7 +45,7 @@ struct ProfileHelpView: View {
                             color: Theme.textSecondary,
                             content: [
                                 "Tap the gear icon in the top right to access the **Command Settings**.",
-                                "Inside Settings, you can customize the Grind Engine (Tempo Profiles, Ghost Targets), manage your Exercise Vault, sync with Apple Health, and export your entire database."
+                                "Inside Settings, you can customize the Grind Engine (Tempo Rest Timers, Haptic Cadence Metronome, Ghost Targets), manage your Exercise Database, sync with Apple Health, and export your entire database."
                             ]
                         )
                     }

@@ -21,14 +21,14 @@ final class AICoachService {
         var muscleFrequencies: [String: Int] = [:]
         for session in sessions {
             for exercise in session.exercises {
-                let muscle = exercise.loggedTargetMuscle
+                let muscle = exercise.normalizedTargetMuscle
                 if !muscle.isEmpty && muscle != "UNKNOWN" {
                     muscleFrequencies[muscle, default: 0] += 1
                 }
             }
         }
         
-        let allMuscles = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core"]
+        let allMuscles = MuscleGroup.all
         var focus = "Chest"
         var minCount = Int.max
         for muscle in allMuscles {
@@ -84,5 +84,80 @@ final class AICoachService {
             coachMessage: message,
             progressiveOverloadTip: overloadTip
         )
+    }
+    
+    func calculateOverloadTarget(for exerciseName: String, sessions: [WorkoutSession], settings: UserSettings) -> (targetWeight: Double, targetReps: Int, note: String) {
+        let unit = settings.weightUnit.lowercased()
+        let step = unit == "kg" ? 2.5 : 5.0
+        
+        // Find matching exercises in past sessions
+        var lastWeight = 0.0
+        var lastReps = 8
+        var hitFailureLastTime = false
+        
+        // Sort sessions by date (latest first to find the most recent matching exercise)
+        let sortedSessions = sessions.sorted(by: { $0.timestamp > $1.timestamp })
+        
+        for session in sortedSessions {
+            if let matchedEx = session.exercises.first(where: { $0.loggedName.lowercased() == exerciseName.lowercased() || $0.exerciseRef?.name.lowercased() == exerciseName.lowercased() }) {
+                let completedSets = matchedEx.sets.filter { $0.isCompleted }
+                if !completedSets.isEmpty {
+                    // Find the heaviest completed set
+                    if let maxSet = completedSets.max(by: { $0.weight < $1.weight }) {
+                        lastWeight = maxSet.weight
+                        lastReps = maxSet.reps
+                        hitFailureLastTime = maxSet.hitFailure
+                    }
+                    break
+                }
+            }
+        }
+        
+        if lastWeight <= 0 {
+            return (0.0, 8, "No past logs. Establish a baseline today!")
+        }
+        
+        let phase = settings.currentPhase.lowercased()
+        
+        if hitFailureLastTime {
+            return (
+                lastWeight,
+                lastReps,
+                "Last set hit failure. Solidify \(String(format: "%g", lastWeight)) \(unit) for \(lastReps) reps before adding weight."
+            )
+        }
+        
+        if phase.contains("strength") {
+            if lastReps >= 5 {
+                let nextWeight = lastWeight + step
+                return (
+                    nextWeight,
+                    3,
+                    "Strength target met. Load \(String(format: "%g", nextWeight)) \(unit) for 3–5 reps."
+                )
+            } else {
+                return (
+                    lastWeight,
+                    lastReps + 1,
+                    "Strength progression: Lift \(String(format: "%g", lastWeight)) \(unit) for \(lastReps + 1) reps."
+                )
+            }
+        } else {
+            // Hypertrophy/Cutting/Recomp default: 8-12 reps target
+            if lastReps >= 12 {
+                let nextWeight = lastWeight + step
+                return (
+                    nextWeight,
+                    8,
+                    "Hypertrophy ceiling hit. Step up to \(String(format: "%g", nextWeight)) \(unit) for 8 reps."
+                )
+            } else {
+                return (
+                    lastWeight,
+                    lastReps + 1,
+                    "Rep progression: Lift \(String(format: "%g", lastWeight)) \(unit) for \(lastReps + 1) reps."
+                )
+            }
+        }
     }
 }

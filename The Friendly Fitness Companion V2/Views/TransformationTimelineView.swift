@@ -19,7 +19,7 @@ struct TransformationTimelineView: View {
     var body: some View {
         VStack(spacing: 16) {
             if chronologicalPhotos.isEmpty {
-                Text("NO PHOTOS AVAILABLE")
+                Text("No Photos Available")
                     .font(Theme.Typography.technical(14))
                     .foregroundColor(Theme.textSecondary)
             } else {
@@ -56,13 +56,13 @@ struct TransformationTimelineView: View {
                         
                         HStack(spacing: 12) {
                             if currentPhoto.weightAtTime > 0 {
-                                Text("\(String(format: "%.1f", currentPhoto.weightAtTime)) LB")
+                                Text("\(String(format: "%.1f", currentPhoto.weightAtTime)) lb")
                                     .font(Theme.Typography.technical(12, weight: .bold))
                                     .foregroundColor(Theme.accent)
                             }
                             
                             if currentPhoto.phaseAtTime != "N/A" {
-                                Text(currentPhoto.phaseAtTime.uppercased())
+                                Text(currentPhoto.phaseAtTime)
                                     .font(Theme.Typography.technical(10, weight: .bold))
                                     .foregroundColor(Theme.warningOrange)
                                     .padding(.horizontal, 6)
@@ -76,7 +76,7 @@ struct TransformationTimelineView: View {
                                 let initialWeight = chronologicalPhotos[0].weightAtTime
                                 if initialWeight > 0 && currentPhoto.weightAtTime > 0 {
                                     let delta = currentPhoto.weightAtTime - initialWeight
-                                    Text(delta >= 0 ? "+\(String(format: "%.1f", delta)) LB" : "\(String(format: "%.1f", delta)) LB")
+                                    Text(delta >= 0 ? "+\(String(format: "%.1f", delta)) lb" : "\(String(format: "%.1f", delta)) lb")
                                         .font(Theme.Typography.technical(10, weight: .black))
                                         .foregroundColor(delta >= 0 ? Theme.apexGreen : Theme.dangerRed)
                                 }
@@ -88,13 +88,13 @@ struct TransformationTimelineView: View {
                 
                 // Playback status bar / frame indicator
                 HStack {
-                    Text("FRAME \(currentIndex + 1) / \(chronologicalPhotos.count)")
+                    Text("Frame \(currentIndex + 1) / \(chronologicalPhotos.count)")
                         .font(Theme.Typography.technical(10, weight: .bold))
                         .foregroundColor(Theme.textSecondary)
                     
                     Spacer()
                     
-                    Text("SPEED: \(String(format: "%.1fs", playbackSpeed))")
+                    Text("Speed: \(String(format: "%.1fs", playbackSpeed))")
                         .font(Theme.Typography.technical(10, weight: .bold))
                         .foregroundColor(Theme.textSecondary)
                 }

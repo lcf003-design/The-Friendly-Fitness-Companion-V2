@@ -5,6 +5,8 @@ struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settings: [UserSettings]
     @State private var showOnboarding: Bool = false
+    @State private var sessionToRestore: WorkoutSession? = nil
+    @State private var showRestoreAlert = false
     @Query private var allExercises: [Exercise]
     @Query private var sessions: [WorkoutSession]
     
@@ -36,9 +38,36 @@ struct MainTabView: View {
             if let userSettings = settings.first, !userSettings.isOnboarded {
                 showOnboarding = true
             }
+            
+            // Check for crash recovery
+            if let activeId = settings.first?.activeWorkoutSessionId,
+               let restored = sessions.first(where: { $0.id == activeId }) {
+                showRestoreAlert = true
+            }
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(isPresented: $showOnboarding)
+        }
+        .fullScreenCover(item: $sessionToRestore) { session in
+            WorkoutLoggerView(session: session, isNewSession: true)
+        }
+        .alert("Active Workout Detected", isPresented: $showRestoreAlert) {
+            Button("Discard", role: .destructive) {
+                if let activeId = settings.first?.activeWorkoutSessionId,
+                   let restored = sessions.first(where: { $0.id == activeId }) {
+                    modelContext.delete(restored)
+                }
+                settings.first?.activeWorkoutSessionId = nil
+                try? modelContext.save()
+            }
+            Button("Resume", role: .cancel) {
+                if let activeId = settings.first?.activeWorkoutSessionId,
+                   let restored = sessions.first(where: { $0.id == activeId }) {
+                    sessionToRestore = restored
+                }
+            }
+        } message: {
+            Text("Do you want to resume your in-progress workout session?")
         }
         .preferredColorScheme(settings.first?.themePreference == 1 ? .light : (settings.first?.themePreference == 2 ? .dark : nil))
     }
@@ -86,12 +115,12 @@ struct MainTabView: View {
                 Exercise(name: "Face Pulls", targetMuscle: "Shoulders"),
                 
                 // Arms (Biceps, Triceps)
-                Exercise(name: "Barbell Bicep Curl", targetMuscle: "Arms"),
-                Exercise(name: "Incline Dumbbell Curl", targetMuscle: "Arms"),
-                Exercise(name: "Hammer Curl", targetMuscle: "Arms"),
-                Exercise(name: "Tricep Pushdown", targetMuscle: "Arms"),
-                Exercise(name: "Overhead Tricep Extension", targetMuscle: "Arms"),
-                Exercise(name: "Skullcrushers", targetMuscle: "Arms"),
+                Exercise(name: "Barbell Bicep Curl", targetMuscle: "Biceps"),
+                Exercise(name: "Incline Dumbbell Curl", targetMuscle: "Biceps"),
+                Exercise(name: "Hammer Curl", targetMuscle: "Biceps"),
+                Exercise(name: "Tricep Pushdown", targetMuscle: "Triceps"),
+                Exercise(name: "Overhead Tricep Extension", targetMuscle: "Triceps"),
+                Exercise(name: "Skullcrushers", targetMuscle: "Triceps"),
                 
                 // Abs
                 Exercise(name: "Cable Crunch", targetMuscle: "Abs"),

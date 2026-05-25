@@ -7,15 +7,36 @@ final class Exercise {
     var name: String = ""
     var targetMuscle: String = "" // e.g., "Chest", "Quads"
     var notes: String?
+    var defaultRestTime: Int = 120 // Default rest time in seconds
     
     @Relationship(inverse: \WorkoutExercise.exerciseRef)
     var loggedInstances: [WorkoutExercise]?
     
-    init(id: UUID = UUID(), name: String, targetMuscle: String, notes: String? = nil) {
+    init(id: UUID = UUID(), name: String, targetMuscle: String, notes: String? = nil, defaultRestTime: Int = 120) {
         self.id = id
         self.name = name
         self.targetMuscle = targetMuscle
         self.notes = notes
+        self.defaultRestTime = defaultRestTime
+    }
+    
+    var normalizedTargetMuscle: String {
+        let muscle = targetMuscle
+        if muscle == "Arms" {
+            let lowerName = name.lowercased()
+            if lowerName.contains("bicep") || lowerName.contains("curl") || lowerName.contains("hammer") {
+                return "Biceps"
+            } else if lowerName.contains("tricep") || lowerName.contains("pushdown") || lowerName.contains("extension") || lowerName.contains("skullcrusher") {
+                return "Triceps"
+            } else {
+                return "Biceps"
+            }
+        } else if muscle == "Lats" {
+            return "Back"
+        } else if muscle == "Core" {
+            return "Abs"
+        }
+        return muscle
     }
 }
 
@@ -63,16 +84,38 @@ final class WorkoutExercise {
     
     var loggedName: String = ""
     var loggedTargetMuscle: String = ""
+    var supersetGroupId: UUID? = nil
     
     @Relationship(deleteRule: .cascade)
     var sets: [ExerciseSet] = []
     
-    init(id: UUID = UUID(), exerciseRef: Exercise? = nil, sets: [ExerciseSet] = []) {
+    init(id: UUID = UUID(), exerciseRef: Exercise? = nil, sets: [ExerciseSet] = [], supersetGroupId: UUID? = nil) {
         self.id = id
         self.exerciseRef = exerciseRef
         self.loggedName = exerciseRef?.name ?? "UNKNOWN"
         self.loggedTargetMuscle = exerciseRef?.targetMuscle ?? "UNKNOWN"
         self.sets = sets
+        self.supersetGroupId = supersetGroupId
+    }
+    
+    var normalizedTargetMuscle: String {
+        let muscle = loggedTargetMuscle.isEmpty ? (exerciseRef?.targetMuscle ?? "UNKNOWN") : loggedTargetMuscle
+        if muscle == "Arms" {
+            let name = loggedName.isEmpty ? (exerciseRef?.name ?? "") : loggedName
+            let lowerName = name.lowercased()
+            if lowerName.contains("bicep") || lowerName.contains("curl") || lowerName.contains("hammer") {
+                return "Biceps"
+            } else if lowerName.contains("tricep") || lowerName.contains("pushdown") || lowerName.contains("extension") || lowerName.contains("skullcrusher") {
+                return "Triceps"
+            } else {
+                return "Biceps"
+            }
+        } else if muscle == "Lats" {
+            return "Back"
+        } else if muscle == "Core" {
+            return "Abs"
+        }
+        return muscle
     }
 }
 
@@ -84,9 +127,15 @@ final class ExerciseSet {
     var hitFailure: Bool = false
     var forcedReps: Int = 0
     var negatives: Int = 0
+    var setType: String = "working" // "working", "warmup", "drop"
     // CloudKit doesn't support primitive arrays, so we store it as a comma-separated string
     var restPausesData: String = ""
     var notes: String = ""
+    
+    // Cardio metrics
+    var cardioDistance: Double = 0.0
+    var cardioDurationSeconds: Int = 0
+    var cardioCalories: Int = 0
     
     // Computed property for UI usage
     var restPauses: [Int] {
@@ -101,7 +150,7 @@ final class ExerciseSet {
     
     var isCompleted: Bool = false
     
-    init(id: UUID = UUID(), weight: Double, reps: Int, hitFailure: Bool = false, forcedReps: Int = 0, negatives: Int = 0, restPauses: [Int] = [], isCompleted: Bool = false) {
+    init(id: UUID = UUID(), weight: Double, reps: Int, hitFailure: Bool = false, forcedReps: Int = 0, negatives: Int = 0, restPauses: [Int] = [], isCompleted: Bool = false, setType: String = "working", cardioDistance: Double = 0.0, cardioDurationSeconds: Int = 0, cardioCalories: Int = 0) {
         self.id = id
         self.weight = weight
         self.reps = reps
@@ -109,6 +158,10 @@ final class ExerciseSet {
         self.forcedReps = forcedReps
         self.negatives = negatives
         self.isCompleted = isCompleted
+        self.setType = setType
+        self.cardioDistance = cardioDistance
+        self.cardioDurationSeconds = cardioDurationSeconds
+        self.cardioCalories = cardioCalories
         
         // This setter triggers the data population
         self.restPauses = restPauses
@@ -137,6 +190,10 @@ final class UserSettings {
     var trainingAgeYears: Int = 0
     var currentPhase: String = "Hypertrophy" // e.g., "Hypertrophy", "Strength", "Cutting", "Recomp"
     
+    // V2 Expanded Biometrics
+    var userAgeYears: Int = 25
+    var activityLevel: String = "Moderate"
+    
     // Ghost Tracking
     var ghostTrackingPreference: Int = 0 // 0 = Most Recent, 1 = All-Time PR
     
@@ -144,7 +201,18 @@ final class UserSettings {
     var isRecoveryOverridden: Bool = false
     var manualRecoveryScore: Double = 0.8 // Default to 80%
     
-    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isOnboarded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0, isRecoveryOverridden: Bool = false, manualRecoveryScore: Double = 0.8) {
+    // Premium Gym Log Fields
+    var activeWorkoutSessionId: UUID? = nil
+    var availablePlatesCSV: String = "45,35,25,10,5,2.5"
+    
+    // V2 Weekly Fasting schedule targets Mon-Sun (e.g. 16,16,16,16,16,16,16)
+    var weeklyFastingScheduleCSV: String = "16,16,16,16,16,16,16"
+    
+    // Barbell Settings
+    var barbellType: String = "Olympic Bar (45 lb)"
+    var barbellWeight: Double = 45.0
+    
+    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isOnboarded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0, isRecoveryOverridden: Bool = false, manualRecoveryScore: Double = 0.8, activeWorkoutSessionId: UUID? = nil, availablePlatesCSV: String = "45,35,25,10,5,2.5", userAgeYears: Int = 25, activityLevel: String = "Moderate", weeklyFastingScheduleCSV: String = "16,16,16,16,16,16,16", barbellType: String = "Olympic Bar (45 lb)", barbellWeight: Double = 45.0) {
         self.id = id
         self.userName = userName
         self.bodyWeight = bodyWeight
@@ -162,10 +230,20 @@ final class UserSettings {
         self.heightInches = heightInches
         self.trainingAgeYears = trainingAgeYears
         self.currentPhase = currentPhase
+        
+        self.userAgeYears = userAgeYears
+        self.activityLevel = activityLevel
+        
         self.ghostTrackingPreference = ghostTrackingPreference
         
         self.isRecoveryOverridden = isRecoveryOverridden
         self.manualRecoveryScore = manualRecoveryScore
+        
+        self.activeWorkoutSessionId = activeWorkoutSessionId
+        self.availablePlatesCSV = availablePlatesCSV
+        self.weeklyFastingScheduleCSV = weeklyFastingScheduleCSV
+        self.barbellType = barbellType
+        self.barbellWeight = barbellWeight
     }
 }
 
@@ -209,12 +287,21 @@ final class FastingSession {
     var isCompleted: Bool = false
     var endTime: Date? = nil
     
-    init(id: UUID = UUID(), startTime: Date = Date(), targetHours: Int = 16, isCompleted: Bool = false, endTime: Date? = nil) {
+    var energyRating: Int? = nil
+    var focusRating: Int? = nil
+    var hungerRating: Int? = nil
+    var wellnessNotes: String? = nil
+    
+    init(id: UUID = UUID(), startTime: Date = Date(), targetHours: Int = 16, isCompleted: Bool = false, endTime: Date? = nil, energyRating: Int? = nil, focusRating: Int? = nil, hungerRating: Int? = nil, wellnessNotes: String? = nil) {
         self.id = id
         self.startTime = startTime
         self.targetHours = targetHours
         self.isCompleted = isCompleted
         self.endTime = endTime
+        self.energyRating = energyRating
+        self.focusRating = focusRating
+        self.hungerRating = hungerRating
+        self.wellnessNotes = wellnessNotes
     }
 }
 
@@ -236,3 +323,24 @@ final class PhysiquePhoto {
         self.note = note
     }
 }
+
+struct MuscleGroup {
+    static let all: [String] = [
+        "Abs", "Back", "Biceps", "Calves", "Chest",
+        "Glutes", "Hamstrings", "Quads", "Shoulders", "Triceps", "Cardio"
+    ]
+}
+
+@Model
+final class WaterLog {
+    var id: UUID = UUID()
+    var timestamp: Date = Date()
+    var amountOz: Double = 0.0
+    
+    init(id: UUID = UUID(), timestamp: Date = Date(), amountOz: Double) {
+        self.id = id
+        self.timestamp = timestamp
+        self.amountOz = amountOz
+    }
+}
+

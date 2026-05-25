@@ -1,5 +1,18 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
+
+struct CSVFile: Transferable {
+    let text: String
+    
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(contentType: .commaSeparatedText) { file in
+            file.text.data(using: .utf8) ?? Data()
+        } importing: { data in
+            CSVFile(text: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+}
 
 struct JournalView: View {
     @Environment(\.modelContext) private var modelContext
@@ -10,11 +23,12 @@ struct JournalView: View {
     @State private var isActiveSessionNew = false
     @State private var isShowingTemplateBuilder = false
     @State private var isShowingHelp = false
+    @State private var isShowingImportSheet = false
     
     enum FilterType: String, CaseIterable {
-        case all = "ALL"
-        case failure = "ABSOLUTE FAILURE"
-        case restPause = "REST-PAUSE"
+        case all = "All"
+        case failure = "Absolute Failure"
+        case restPause = "Rest-Pause"
     }
     @State private var activeFilter: FilterType = .all
     
@@ -37,6 +51,36 @@ struct JournalView: View {
         }
     }
     
+    private var workoutHistoryCSV: String {
+        var csv = "Session Date,Session Name,Intensity Score,Exercise Name,Target Muscle,Set Number,Set Type,Weight (lb/kg),Reps,Failure reached,Forced Reps,Negatives,Notes\n"
+        
+        let sortedSessions = sessions.sorted { $0.timestamp > $1.timestamp }
+        for session in sortedSessions {
+            let sessionDate = session.timestamp.formatted(date: .numeric, time: .shortened)
+            let sessionName = session.name.replacingOccurrences(of: ",", with: " ")
+            let intensity = session.totalIntensityScore
+            
+            for exercise in session.exercises {
+                let exerciseName = (exercise.loggedName.isEmpty ? (exercise.exerciseRef?.name ?? "Unknown") : exercise.loggedName).replacingOccurrences(of: ",", with: " ")
+                let muscle = exercise.normalizedTargetMuscle
+                
+                for (index, set) in exercise.sets.enumerated() {
+                    let setNum = index + 1
+                    let type = set.setType
+                    let weight = set.weight
+                    let reps = set.reps
+                    let failure = set.hitFailure ? "YES" : "NO"
+                    let forced = set.forcedReps
+                    let negatives = set.negatives
+                    let notes = set.notes.replacingOccurrences(of: ",", with: " ").replacingOccurrences(of: "\n", with: " ")
+                    
+                    csv += "\(sessionDate),\(sessionName),\(intensity),\(exerciseName),\(muscle),\(setNum),\(type),\(weight),\(reps),\(failure),\(forced),\(negatives),\(notes)\n"
+                }
+            }
+        }
+        return csv
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -45,7 +89,7 @@ struct JournalView: View {
                 VStack(spacing: 0) {
                     // THE ARSENAL (Templates)
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("THE ARSENAL")
+                        Text("Routines")
                             .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.textSecondary)
                             .padding(.horizontal)
@@ -69,6 +113,26 @@ struct JournalView: View {
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
                                             .stroke(Theme.border, style: StrokeStyle(lineWidth: 2, dash: [5]))
+                                    )
+                                }
+                                
+                                // Import Routine Button
+                                Button(action: {
+                                    isShowingImportSheet = true
+                                }) {
+                                    VStack {
+                                        Image(systemName: "square.and.arrow.down")
+                                            .font(.title)
+                                        Text("Import Routine")
+                                            .font(.caption.bold())
+                                    }
+                                    .foregroundColor(Theme.warningOrange)
+                                    .frame(width: 120, height: 100)
+                                    .background(Theme.surface)
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Theme.warningOrange.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [5]))
                                     )
                                 }
                                 
@@ -98,6 +162,14 @@ struct JournalView: View {
                                         )
                                     }
                                     .contextMenu {
+                                        Button(action: {
+                                            let code = encodeRoutine(template)
+                                            UIPasteboard.general.string = code
+                                            HapticManager.shared.playSuccess()
+                                        }) {
+                                            Label("Share Routine Code", systemImage: "square.and.arrow.up")
+                                        }
+                                        
                                         Button(role: .destructive, action: {
                                             modelContext.delete(template)
                                             try? modelContext.save()
@@ -146,7 +218,7 @@ struct JournalView: View {
                                 .font(.system(size: 60))
                                 .foregroundColor(Theme.border)
                             
-                            Text(sessions.isEmpty ? "No history. Time to bleed." : "No sessions match filter.")
+                            Text(sessions.isEmpty ? "No workout history yet. Start a session below!" : "No sessions match filter.")
                                 .font(Theme.Typography.technical(16))
                                 .foregroundColor(Theme.textSecondary)
                         }
@@ -169,12 +241,12 @@ struct JournalView: View {
                     }
                     
                     Button(action: {
-                        let newSession = WorkoutSession(name: "Late Night Grind", timestamp: Date(), rpe: 8, exercises: [])
+                        let newSession = WorkoutSession(name: "Workout Session", timestamp: Date(), rpe: 8, exercises: [])
                         modelContext.insert(newSession)
                         isActiveSessionNew = true
                         activeSession = newSession
                     }) {
-                        Text("START GRIND")
+                        Text("Start Workout")
                             .font(Theme.Typography.technical(18, weight: .black))
                             .foregroundColor(.black)
                             .frame(maxWidth: .infinity)
@@ -200,6 +272,16 @@ struct JournalView: View {
                             .foregroundColor(Theme.textSecondary)
                     }
                 }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    ShareLink(
+                        item: CSVFile(text: workoutHistoryCSV),
+                        preview: SharePreview("workout_history.csv")
+                    ) {
+                        Image(systemName: "arrow.down.doc")
+                            .foregroundColor(Theme.accent)
+                    }
+                }
             }
             .fullScreenCover(item: $activeSession) { session in
                 WorkoutLoggerView(session: session, isNewSession: isActiveSessionNew)
@@ -209,6 +291,9 @@ struct JournalView: View {
             }
             .sheet(isPresented: $isShowingTemplateBuilder) {
                 TemplateBuilderView()
+            }
+            .sheet(isPresented: $isShowingImportSheet) {
+                ImportRoutineSheet()
             }
         }
     }
@@ -231,6 +316,174 @@ struct JournalView: View {
             for index in offsets {
                 modelContext.delete(sessions[index])
             }
+        }
+    }
+    
+    private func encodeRoutine(_ template: WorkoutTemplate) -> String {
+        let cleanName = template.name.replacingOccurrences(of: "|", with: "").replacingOccurrences(of: ";", with: "").replacingOccurrences(of: ",", with: "")
+        var exercisesPart = ""
+        for ex in template.targetExercises {
+            let cleanExName = ex.name.replacingOccurrences(of: "|", with: "").replacingOccurrences(of: ";", with: "").replacingOccurrences(of: ",", with: "")
+            let cleanMuscle = ex.targetMuscle.replacingOccurrences(of: "|", with: "").replacingOccurrences(of: ";", with: "").replacingOccurrences(of: ",", with: "")
+            if !exercisesPart.isEmpty {
+                exercisesPart += ";"
+            }
+            exercisesPart += "\(cleanExName),\(cleanMuscle)"
+        }
+        return "FFC-ROUTINE:\(cleanName)|\(exercisesPart)"
+    }
+}
+
+struct ImportRoutineSheet: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var shareCode: String = ""
+    @State private var errorMessage: String? = nil
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.midnightMatte.ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Paste Routine Code")
+                            .font(Theme.Typography.technical(12, weight: .bold))
+                            .foregroundColor(Theme.warningOrange)
+                            .tracking(1.5)
+                        
+                        Text("Enter a valid Friendly Fitness Companion routine code to import it into your arsenal.")
+                            .font(.caption)
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    
+                    TextField("FFC-ROUTINE:RoutineName|Exercise1,Muscle;...", text: $shareCode, axis: .vertical)
+                        .lineLimit(4...8)
+                        .padding()
+                        .background(Theme.surface)
+                        .foregroundColor(Theme.textPrimary)
+                        .font(.system(.body, design: .monospaced))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
+                        .padding(.horizontal)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.none)
+                    
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .padding(.horizontal)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: importRoutine) {
+                        Text("Import Routine")
+                            .font(Theme.Typography.technical(16, weight: .black))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(shareCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Theme.accent)
+                            .cornerRadius(12)
+                    }
+                    .disabled(shareCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .padding()
+                }
+                .padding(.top, 20)
+            }
+            .navigationTitle("Import Routine")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Theme.textSecondary)
+                }
+            }
+        }
+    }
+    
+    private func importRoutine() {
+        let code = shareCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard code.hasPrefix("FFC-ROUTINE:") else {
+            errorMessage = "Invalid code: Missing FFC-ROUTINE prefix."
+            HapticManager.shared.playHeavyImpact()
+            return
+        }
+        
+        let payload = String(code.dropFirst("FFC-ROUTINE:".count))
+        let parts = payload.components(separatedBy: "|")
+        guard parts.count >= 2 else {
+            errorMessage = "Invalid code: Missing name or exercise payload."
+            HapticManager.shared.playHeavyImpact()
+            return
+        }
+        
+        let name = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            errorMessage = "Invalid code: Routine name cannot be empty."
+            HapticManager.shared.playHeavyImpact()
+            return
+        }
+        
+        let exercisesPart = parts[1]
+        let entries = exercisesPart.components(separatedBy: ";")
+        
+        var importedExercises: [Exercise] = []
+        
+        // Fetch all existing exercises to reuse references if they exist
+        let descriptor = FetchDescriptor<Exercise>()
+        let existingExercises = (try? modelContext.fetch(descriptor)) ?? []
+        
+        for entry in entries {
+            let entryClean = entry.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !entryClean.isEmpty else { continue }
+            
+            let exParts = entryClean.components(separatedBy: ",")
+            guard exParts.count >= 2 else { continue }
+            
+            let exName = exParts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            let exMuscle = exParts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            guard !exName.isEmpty else { continue }
+            
+            // Look up existing exercise
+            if let existing = existingExercises.first(where: { $0.name.lowercased() == exName.lowercased() }) {
+                importedExercises.append(existing)
+            } else {
+                // Validate muscle
+                let muscle = MuscleGroup.all.first(where: { $0.lowercased() == exMuscle.lowercased() }) ?? "Shoulders"
+                let newEx = Exercise(name: exName, targetMuscle: muscle)
+                modelContext.insert(newEx)
+                importedExercises.append(newEx)
+            }
+        }
+        
+        guard !importedExercises.isEmpty else {
+            errorMessage = "No valid exercises found in code."
+            HapticManager.shared.playHeavyImpact()
+            return
+        }
+        
+        let template = WorkoutTemplate(name: name, targetExercises: importedExercises)
+        modelContext.insert(template)
+        
+        do {
+            try modelContext.save()
+            HapticManager.shared.playSuccess()
+            dismiss()
+        } catch {
+            errorMessage = "Database save failed."
+            HapticManager.shared.playHeavyImpact()
         }
     }
 }
@@ -298,12 +551,12 @@ struct SessionReportView: View {
         VStack(spacing: 40) {
             // Header
             VStack(spacing: 8) {
-                Text(session.name.uppercased())
+                Text(session.name)
                     .font(Theme.Typography.technical(48, weight: .black))
                     .foregroundColor(Theme.textPrimary)
                     .multilineTextAlignment(.center)
                 
-                Text(session.timestamp.formatted(date: .abbreviated, time: .shortened).uppercased())
+                Text(session.timestamp.formatted(date: .abbreviated, time: .shortened))
                     .font(Theme.Typography.technical(16, weight: .bold))
                     .foregroundColor(Theme.textSecondary)
                     .tracking(2)
@@ -314,7 +567,7 @@ struct SessionReportView: View {
                 Text("\(session.totalIntensityScore)")
                     .font(Theme.Typography.technical(120, weight: .black))
                     .foregroundColor(Theme.accent)
-                Text("INTENSITY SCORE")
+                Text("Intensity Score")
                     .font(Theme.Typography.technical(18, weight: .bold))
                     .foregroundColor(Theme.textSecondary)
                     .tracking(4)
@@ -323,10 +576,10 @@ struct SessionReportView: View {
             // Exercises List
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(session.exercises) { exercise in
-                    let rawName = exercise.loggedName.isEmpty ? (exercise.exerciseRef?.name ?? "UNKNOWN") : exercise.loggedName
-                    let name = rawName.uppercased()
+                    let rawName = exercise.loggedName.isEmpty ? (exercise.exerciseRef?.name ?? "Unknown") : exercise.loggedName
+                    let name = rawName
                     let totalVolume = exercise.sets.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
-                    let setSummary = String(format: "%d SETS • %.1f VOL", exercise.sets.count, totalVolume)
+                    let setSummary = String(format: "%d Sets • %.1f Vol", exercise.sets.count, totalVolume)
                     
                     HStack {
                         Text(name)
@@ -345,7 +598,7 @@ struct SessionReportView: View {
             Spacer(minLength: 40)
             
             // Watermark
-            Text("THE FRIENDLY FITNESS COMPANION — COMMAND CENTER DATA V2")
+            Text("The Friendly Fitness Companion — Session Data Summary")
                 .font(Theme.Typography.technical(12, weight: .bold))
                 .foregroundColor(Theme.textSecondary.opacity(0.5))
                 .tracking(3)

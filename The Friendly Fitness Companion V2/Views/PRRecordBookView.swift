@@ -114,9 +114,9 @@ struct PRRecordBookView: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("PR Category", selection: $selectedSubTab) {
-                Text("HEAVYWEIGHT").tag(0)
-                Text("TONNAGE").tag(1)
-                Text("INTENSITY").tag(2)
+                Text("Heavyweight").tag(0)
+                Text("Tonnage").tag(1)
+                Text("Intensity").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
@@ -125,7 +125,7 @@ struct PRRecordBookView: View {
             
             if allSessions.isEmpty {
                 Spacer()
-                Text("NO RECORD DATA FOUND")
+                Text("No Record Data Found")
                     .font(Theme.Typography.technical(14, weight: .bold))
                     .foregroundColor(Theme.textSecondary)
                 Spacer()
@@ -153,7 +153,7 @@ struct PRRecordBookView: View {
     private var heavyweightSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Horizontal highlight of the overall top 3 lifts
-            Text("HALL OF STRENGTH")
+            Text("Hall of Strength")
                 .font(Theme.Typography.technical(12, weight: .black))
                 .foregroundColor(Theme.textSecondary)
                 .tracking(2)
@@ -179,7 +179,7 @@ struct PRRecordBookView: View {
                                         .foregroundColor(Theme.textSecondary)
                                 }
                                 
-                                Text(pr.exerciseName.uppercased())
+                                Text(pr.exerciseName)
                                     .font(Theme.Typography.technical(12, weight: .black))
                                     .foregroundColor(Theme.textPrimary)
                                     .lineLimit(1)
@@ -209,7 +209,7 @@ struct PRRecordBookView: View {
             
             Divider().background(Theme.border.opacity(0.3))
             
-            Text("ALL PERSONAL BESTS")
+            Text("All Personal Bests")
                 .font(Theme.Typography.technical(12, weight: .black))
                 .foregroundColor(Theme.textSecondary)
                 .tracking(2)
@@ -217,10 +217,10 @@ struct PRRecordBookView: View {
             ForEach(absoluteWeightPRs, id: \.exerciseName) { pr in
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(pr.exerciseName.uppercased())
+                        Text(pr.exerciseName)
                             .font(Theme.Typography.technical(14, weight: .black))
                             .foregroundColor(Theme.textPrimary)
-                        Text("RECORDED: \(pr.date.formatted(date: .abbreviated, time: .omitted))")
+                        Text("Recorded: \(pr.date.formatted(date: .abbreviated, time: .omitted))")
                             .font(Theme.Typography.technical(10))
                             .foregroundColor(Theme.textSecondary)
                     }
@@ -243,7 +243,7 @@ struct PRRecordBookView: View {
     private var tonnageSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Highest Session Tonnage Card
-            Text("SESSION VOLUME RECORD")
+            Text("Session Volume Record")
                 .font(Theme.Typography.technical(12, weight: .black))
                 .foregroundColor(Theme.textSecondary)
                 .tracking(2)
@@ -255,7 +255,7 @@ struct PRRecordBookView: View {
                             .foregroundColor(Theme.warningOrange)
                             .font(.title3)
                         Spacer()
-                        Text("PEAK SESSION")
+                        Text("Peak Session")
                             .font(Theme.Typography.technical(10, weight: .bold))
                             .foregroundColor(Theme.warningOrange)
                             .padding(.horizontal, 6)
@@ -264,7 +264,7 @@ struct PRRecordBookView: View {
                             .cornerRadius(4)
                     }
                     
-                    Text(bestSession.sessionName.uppercased())
+                    Text(bestSession.sessionName)
                         .font(Theme.Typography.technical(16, weight: .black))
                         .foregroundColor(Theme.textPrimary)
                     
@@ -272,12 +272,12 @@ struct PRRecordBookView: View {
                         Text("\(bestSession.tonnage, specifier: "%,.0f")")
                             .font(Theme.Typography.technical(36, weight: .black))
                             .foregroundColor(Theme.warningOrange)
-                        Text("LB TOTAL VOLUME")
+                        Text("lb Total Volume")
                             .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.textSecondary)
                     }
                     
-                    Text("LOCKED IN ON \(bestSession.date.formatted(date: .long, time: .omitted))")
+                    Text("Recorded on \(bestSession.date.formatted(date: .long, time: .omitted))")
                         .font(Theme.Typography.technical(10))
                         .foregroundColor(Theme.textSecondary)
                 }
@@ -296,7 +296,7 @@ struct PRRecordBookView: View {
             
             Divider().background(Theme.border.opacity(0.3))
             
-            Text("SINGLE-SET VOLUME BESTS")
+            Text("Single-Set Volume Bests")
                 .font(Theme.Typography.technical(12, weight: .black))
                 .foregroundColor(Theme.textSecondary)
                 .tracking(2)
@@ -304,7 +304,7 @@ struct PRRecordBookView: View {
             ForEach(singleSetTonnagePRs, id: \.exerciseName) { pr in
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(pr.exerciseName.uppercased())
+                        Text(pr.exerciseName)
                             .font(Theme.Typography.technical(14, weight: .black))
                             .foregroundColor(Theme.textPrimary)
                         Text("\(pr.weight, specifier: "%g") LB × \(pr.reps) REPS")
@@ -334,7 +334,7 @@ struct PRRecordBookView: View {
     
     private var intensitySection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("HIGH INTENSITY BREAKTHROUGHS")
+            Text("High Intensity Breakthroughs")
                 .font(Theme.Typography.technical(12, weight: .black))
                 .foregroundColor(Theme.textSecondary)
                 .tracking(2)
@@ -344,8 +344,8 @@ struct PRRecordBookView: View {
             // Rest-Pause Card
             if let rp = records.maxRestPauses {
                 intensityCard(
-                    title: "MOST REST-PAUSES IN A SET",
-                    value: "\(rp.count) INTERRUPTIONS",
+                    title: "Most Rest-Pauses in a Set",
+                    value: "\(rp.count) Interruptions",
                     exercise: rp.exerciseName,
                     date: rp.date,
                     color: Theme.accent,
@@ -356,8 +356,8 @@ struct PRRecordBookView: View {
             // Negatives Card
             if let neg = records.maxNegatives {
                 intensityCard(
-                    title: "MOST NEGATIVES IN A SET",
-                    value: "\(neg.count) ECCENTRICS",
+                    title: "Most Negatives in a Set",
+                    value: "\(neg.count) Eccentrics",
                     exercise: neg.exerciseName,
                     date: neg.date,
                     color: Theme.dangerRed,
@@ -368,8 +368,8 @@ struct PRRecordBookView: View {
             // Forced Reps Card
             if let forced = records.maxForcedReps {
                 intensityCard(
-                    title: "MOST ASSISTED / FORCED REPS",
-                    value: "\(forced.count) FORCED",
+                    title: "Most Assisted / Forced Reps",
+                    value: "\(forced.count) Forced",
                     exercise: forced.exerciseName,
                     date: forced.date,
                     color: Theme.apexGreen,
@@ -396,7 +396,7 @@ struct PRRecordBookView: View {
                     .foregroundColor(color)
             }
             
-            Text(exercise.uppercased())
+            Text(exercise)
                 .font(Theme.Typography.technical(16, weight: .black))
                 .foregroundColor(Theme.textPrimary)
             
@@ -404,7 +404,7 @@ struct PRRecordBookView: View {
                 .font(Theme.Typography.technical(22, weight: .black))
                 .foregroundColor(color)
             
-            Text("SET RECORDED ON \(date.formatted(date: .long, time: .omitted))")
+            Text("Set recorded on \(date.formatted(date: .long, time: .omitted))")
                 .font(Theme.Typography.technical(10))
                 .foregroundColor(Theme.textSecondary)
         }

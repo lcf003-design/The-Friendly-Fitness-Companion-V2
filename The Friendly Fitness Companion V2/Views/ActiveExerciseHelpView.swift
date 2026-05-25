@@ -17,26 +17,25 @@ struct ActiveExerciseHelpView: View {
                             .padding(.bottom, 8)
                         
                         HelpSection(
-                            title: "1. The Intensity Matrix",
+                            title: "1. Tactile Scrub Logging",
                             icon: "square.grid.3x3.fill",
                             color: Theme.accent,
                             content: [
-                                "The main logging area is a 3-tier matrix.",
-                                "**Top Level (Primary Input):** Log your weight and reps.",
-                                "**Middle Level (Inroad Gauge):** A horizontal bar that tracks your current set's weight against your Ghost Target (historical PR). Pushing past the Ghost triggers a gold pulse—you are setting a new PR.",
-                                "**Bottom Level (Micro-Metrics):** Technical tracking for advanced training variables."
+                                "Log your grinds using a zero-bounce, tactile entry system designed to replace the keyboard.",
+                                "**Digital Crown Scrubbing**: Tap and hold on the **Weight** or **Reps** inputs, then drag your finger up or down to dial numbers in (weight increments by standard 2.5 lb plates). Every unit change triggers a crisp, physical click.",
+                                "**Tug-of-War PR Bar**: A progress bar tracks your live set volume (`Weight x Reps`) against your Ghost Target (historical PR). Exceeding it triggers a gold flash, glowing shadow, and a heavy PR haptic vibration."
                             ]
                         )
                         
                         HelpSection(
                             title: "2. Micro-Metrics & TUT",
-                            icon: "microbe",
+                            icon: "clock.fill",
                             color: Theme.warningOrange,
                             content: [
-                                "**F (Forced Reps):** Reps completed beyond failure with a spotter's physical assistance.",
-                                "**N (Negatives):** Slow, eccentric-only reps performed after concentric failure.",
-                                "**TUT (Time Under Tension):** The app calculates this automatically. It extracts the duration from your active Tempo Profile (e.g. 4-2-4 = 10s) and multiplies it by your reps.",
-                                "**+ RP (Rest-Pause):** Triggers a 15-second countdown timer. You can stop or restart this timer using the interactive gauge. Once elapsed, it appends a 'Rest-Pause' slot to that set."
+                                "**F (Forced Reps)**: Reps completed beyond failure with a spotter's assistance.",
+                                "**N (Negatives)**: Slow, eccentric-only reps performed after concentric failure.",
+                                "**TUT (Time Under Tension)**: Automatically calculated by multiplying your reps by your active Tempo Profile duration (e.g. 4s eccentric + 2s pause = 6s per rep).",
+                                "**+ RP (Rest-Pause)**: Triggers a 15-second countdown timer. When it expires, it appends a rest-pause slot to that set to log consecutive micro-sets."
                             ]
                         )
                         

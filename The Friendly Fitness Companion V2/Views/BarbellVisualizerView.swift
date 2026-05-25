@@ -108,7 +108,7 @@ struct BarbellVisualizerView: View {
                             .overlay(
                                 VStack {
                                     Text("\(weight, specifier: "%g")")
-                                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                                        .font(.system(size: 8, weight: .black, design: .rounded))
                                         .foregroundColor(props.color == .white ? .black : .white)
                                 }
                             )

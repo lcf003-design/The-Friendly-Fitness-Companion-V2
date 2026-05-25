@@ -28,10 +28,10 @@ struct MuscleDetailView: View {
     }
     
     private var recoveryStatus: String {
-        guard let days = daysSinceTrained else { return "FULLY RECOVERED (UNTRAINED)" }
-        if days < 2 { return "EXHAUSTED" }
-        if days < 4 { return "RECOVERING" }
-        return "FULLY RECOVERED"
+        guard let days = daysSinceTrained else { return "Fully Recovered (Untrained)" }
+        if days < 2 { return "Exhausted" }
+        if days < 4 { return "Recovering" }
+        return "Fully Recovered"
     }
     
     private var statusColor: Color {
@@ -46,7 +46,7 @@ struct MuscleDetailView: View {
         var total = 0.0
         for session in recentSessions {
             for wex in session.exercises {
-                let m = wex.loggedTargetMuscle.isEmpty ? (wex.exerciseRef?.targetMuscle ?? "UNKNOWN") : wex.loggedTargetMuscle
+                let m = wex.normalizedTargetMuscle
                 if m.lowercased() == muscleName.lowercased() {
                     total += wex.sets.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
                 }
@@ -62,7 +62,7 @@ struct MuscleDetailView: View {
         for session in recentSessions {
             if session.timestamp >= thirtyDaysAgo {
                 let hasMuscle = session.exercises.contains { wex in
-                    let m = wex.loggedTargetMuscle.isEmpty ? (wex.exerciseRef?.targetMuscle ?? "UNKNOWN") : wex.loggedTargetMuscle
+                    let m = wex.normalizedTargetMuscle
                     return m.lowercased() == muscleName.lowercased()
                 }
                 if hasMuscle {
@@ -77,7 +77,7 @@ struct MuscleDetailView: View {
         var best = 0.0
         for session in recentSessions {
             for wex in session.exercises {
-                let m = wex.loggedTargetMuscle.isEmpty ? (wex.exerciseRef?.targetMuscle ?? "UNKNOWN") : wex.loggedTargetMuscle
+                let m = wex.normalizedTargetMuscle
                 if m.lowercased() == muscleName.lowercased() {
                     for set in wex.sets {
                         if set.isCompleted && set.weight > 0 && set.reps > 0 {
@@ -104,7 +104,7 @@ struct MuscleDetailView: View {
         for session in recentSessions.reversed() { // old to new
             var sessionVolume = 0.0
             for wex in session.exercises {
-                let m = wex.loggedTargetMuscle.isEmpty ? (wex.exerciseRef?.targetMuscle ?? "UNKNOWN") : wex.loggedTargetMuscle
+                let m = wex.normalizedTargetMuscle
                 if m.lowercased() == muscleName.lowercased() {
                     sessionVolume += wex.sets.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
                 }
@@ -120,7 +120,7 @@ struct MuscleDetailView: View {
         var exercises: [(Date, String, Double)] = []
         for session in recentSessions {
             for wex in session.exercises {
-                let m = wex.loggedTargetMuscle.isEmpty ? (wex.exerciseRef?.targetMuscle ?? "UNKNOWN") : wex.loggedTargetMuscle
+                let m = wex.normalizedTargetMuscle
                 if m.lowercased() == muscleName.lowercased() {
                     let volume = wex.sets.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
                     exercises.append((session.timestamp, wex.loggedName.isEmpty ? (wex.exerciseRef?.name ?? "Unknown Exercise") : wex.loggedName, volume))
@@ -159,7 +159,7 @@ struct MuscleDetailView: View {
                                     Text("\(Int(recoveryPercentage * 100))%")
                                         .font(Theme.Typography.technical(28, weight: .black))
                                         .foregroundColor(.white)
-                                    Text("RESTED")
+                                    Text("Rested")
                                         .font(Theme.Typography.technical(9, weight: .bold))
                                         .foregroundColor(Theme.textSecondary)
                                         .tracking(1)
@@ -195,17 +195,17 @@ struct MuscleDetailView: View {
                         
                         // 2. Performance Matrix Grid
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("MUSCLE STATISTICS")
+                            Text("Muscle Statistics")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                                 .tracking(2)
                                 .padding(.horizontal)
                             
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                                statCard(title: "30-DAY FREQUENCY", value: "\(frequency30Days) grinds", icon: "calendar", color: Theme.accent)
-                                statCard(title: "LIFETIME TONNAGE", value: String(format: "%.0f %@", lifetimeVolume, unit), icon: "scalemass.fill", color: Theme.warningOrange)
-                                statCard(title: "BEST ESTIMATED 1RM", value: allTimeBest1RM > 0 ? String(format: "%.1f %@", allTimeBest1RM, unit) : "---", icon: "crown.fill", color: Theme.apexGreen)
-                                statCard(title: "RECOVERY TIME", value: daysSinceTrained != nil ? "\(daysSinceTrained!) days" : "FRESH", icon: "timer", color: Theme.textSecondary)
+                                statCard(title: "30-Day Frequency", value: "\(frequency30Days) workouts", icon: "calendar", color: Theme.accent)
+                                statCard(title: "Lifetime Tonnage", value: String(format: "%.0f %@", lifetimeVolume, unit.lowercased()), icon: "scalemass.fill", color: Theme.warningOrange)
+                                statCard(title: "Best Estimated 1RM", value: allTimeBest1RM > 0 ? String(format: "%.1f %@", allTimeBest1RM, unit.lowercased()) : "---", icon: "crown.fill", color: Theme.apexGreen)
+                                statCard(title: "Recovery Time", value: daysSinceTrained != nil ? "\(daysSinceTrained!) days" : "Fresh", icon: "timer", color: Theme.textSecondary)
                             }
                             .padding(.horizontal)
                         }
@@ -213,7 +213,7 @@ struct MuscleDetailView: View {
                         // 3. Tonnage Progression Chart
                         if volumeTrendData.count >= 2 {
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("VOLUME PROGRESSION")
+                                Text("Volume Progression")
                                     .font(Theme.Typography.technical(12, weight: .bold))
                                     .foregroundColor(Theme.textSecondary)
                                     .tracking(2)
@@ -264,7 +264,7 @@ struct MuscleDetailView: View {
                         
                         // 4. Recent Exercises Ledger
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("RECENT EXERCISES LEDGER")
+                            Text("Recent Exercises Ledger")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                                 .tracking(2)
@@ -312,7 +312,7 @@ struct MuscleDetailView: View {
                     .padding(.vertical, 24)
                 }
             }
-            .navigationTitle(muscleName.uppercased())
+            .navigationTitle(muscleName.capitalized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)

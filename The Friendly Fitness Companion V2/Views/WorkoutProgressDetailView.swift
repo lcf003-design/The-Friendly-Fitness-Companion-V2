@@ -44,17 +44,17 @@ struct WorkoutProgressDetailView: View {
                 VStack(spacing: 24) {
                     // 1. Stats Matrix
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("TACTICAL PROFILE")
+                        Text("Tactical Profile")
                             .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.textSecondary)
                             .tracking(2)
                             .padding(.horizontal)
                         
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            statCard(title: "TOTAL GRINDS", value: "\(stats.totalWorkouts)", icon: "flame.fill", color: Theme.warningOrange)
-                            statCard(title: "AVG INTENSITY", value: "\(stats.avgIntensity) PTS", icon: "bolt.fill", color: Theme.accent)
-                            statCard(title: "MAX TONNAGE", value: String(format: "%.0f %@", stats.maxTonnage, unit), icon: "scalemass.fill", color: Theme.warningOrange)
-                            statCard(title: "AVG TONNAGE", value: String(format: "%.0f %@", stats.avgTonnage, unit), icon: "chart.bar.fill", color: Theme.apexGreen)
+                            statCard(title: "Total Workouts", value: "\(stats.totalWorkouts)", icon: "flame.fill", color: Theme.warningOrange)
+                            statCard(title: "Avg Intensity", value: "\(stats.avgIntensity) Pts", icon: "bolt.fill", color: Theme.accent)
+                            statCard(title: "Max Volume", value: String(format: "%.0f %@", stats.maxTonnage, unit), icon: "scalemass.fill", color: Theme.warningOrange)
+                            statCard(title: "Avg Volume", value: String(format: "%.0f %@", stats.avgTonnage, unit), icon: "chart.bar.fill", color: Theme.apexGreen)
                         }
                         .padding(.horizontal)
                     }
@@ -63,7 +63,7 @@ struct WorkoutProgressDetailView: View {
                     if filteredSessions.count >= 2 {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack {
-                                Text("TREND ANALYSIS")
+                                Text("Trend Analysis")
                                     .font(Theme.Typography.technical(12, weight: .bold))
                                     .foregroundColor(Theme.textSecondary)
                                     .tracking(2)
@@ -71,8 +71,8 @@ struct WorkoutProgressDetailView: View {
                                 Spacer()
                                 
                                 Picker("Metric", selection: $selectedMetric) {
-                                    Text("VOLUME").tag(0)
-                                    Text("INTENSITY").tag(1)
+                                    Text("Volume").tag(0)
+                                    Text("Intensity").tag(1)
                                 }
                                 .pickerStyle(.segmented)
                                 .frame(width: 160)
@@ -86,14 +86,14 @@ struct WorkoutProgressDetailView: View {
                                         
                                         LineMark(
                                             x: .value("Date", session.timestamp, unit: .day),
-                                            y: .value(selectedMetric == 0 ? "Tonnage" : "Intensity", yValue)
+                                            y: .value(selectedMetric == 0 ? "Volume" : "Intensity", yValue)
                                         )
                                         .foregroundStyle(selectedMetric == 0 ? Theme.accent : Theme.warningOrange)
                                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
                                         
                                         PointMark(
                                             x: .value("Date", session.timestamp, unit: .day),
-                                            y: .value(selectedMetric == 0 ? "Tonnage" : "Intensity", yValue)
+                                            y: .value(selectedMetric == 0 ? "Volume" : "Intensity", yValue)
                                         )
                                         .foregroundStyle(selectedMetric == 0 ? Theme.accent : Theme.warningOrange)
                                     }
@@ -128,7 +128,7 @@ struct WorkoutProgressDetailView: View {
                     
                     // 3. Historical Session Ledger
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("HISTORICAL LEDGER")
+                        Text("Historical Ledger")
                             .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.textSecondary)
                             .tracking(2)
@@ -155,7 +155,7 @@ struct WorkoutProgressDetailView: View {
                                             Text(String(format: "%.0f %@", calculateTonnage(for: session), unit))
                                                 .font(Theme.Typography.technical(14, weight: .bold))
                                                 .foregroundColor(Theme.accent)
-                                            Text("\(session.totalIntensityScore) PTS")
+                                            Text("\(session.totalIntensityScore) Pts")
                                                 .font(Theme.Typography.technical(10, weight: .black))
                                                 .foregroundColor(Theme.warningOrange)
                                         }
@@ -182,7 +182,7 @@ struct WorkoutProgressDetailView: View {
                 .padding(.vertical, 24)
             }
         }
-        .navigationTitle(workoutName.uppercased())
+        .navigationTitle(workoutName)
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $selectedSessionForDrillDown) { session in
             WorkoutLoggerView(session: session, isNewSession: false)

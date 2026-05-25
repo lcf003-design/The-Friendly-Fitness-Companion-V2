@@ -38,13 +38,13 @@ struct ProgressHelpView: View {
                         )
                         
                         HelpSection(
-                            title: "3. Body Parts Progress",
+                            title: "3. Body Parts & Activation Stats",
                             icon: "figure.strengthtraining.traditional",
                             color: Theme.apexGreen,
                             content: [
-                                "Switch to the **Body Parts** tab to track recovery and progress for each individual muscle group.",
-                                "See your last trained dates and status badges (Exhausted, Recovering, Recovered) at a glance.",
-                                "Tap any muscle group to open the complete **Recovery & Progress Dashboard** with recovery gauges and lift history."
+                                "Switch to the **Body Parts** tab to track recovery, status, and weekly volume for each individual muscle group in a single consolidated list.",
+                                "**Dual Metric Readouts**: View both your last-trained duration ('LAST: 3 DAYS AGO') and total weekly set volume ('WEEKLY: 12 SETS') side-by-side on each muscle item.",
+                                "**Tactile Detail Sheets**: Tap any muscle row to reveal its dedicated status sheet with circular recovery dial, active status indicators, and a comprehensive workout ledger."
                             ]
                         )
                     }

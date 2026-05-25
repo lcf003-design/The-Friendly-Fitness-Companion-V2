@@ -6,6 +6,8 @@ struct WorkoutLoggerView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var session: WorkoutSession
     @Query private var userSettings: [UserSettings]
+    @Query(sort: \FastingSession.startTime, order: .reverse) private var fastingSessions: [FastingSession]
+    
     @State private var isShowingExerciseSelection = false
     @State private var isEditMode: Bool = false
     @State private var isShowingHelp: Bool = false
@@ -30,7 +32,7 @@ struct WorkoutLoggerView: View {
             .safeAreaInset(edge: .bottom) {
                 operationalSummaryHUD
             }
-            .navigationTitle("Current Grind")
+            .navigationTitle("Current Workout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
@@ -53,10 +55,11 @@ struct WorkoutLoggerView: View {
                 }
             }
             .onAppear {
-                // HARD LOCK: If this is an existing session opened from the Journal, 
-                // it opens in Read-Only mode NO MATTER WHAT. 
-                // The user must press "Edit" to modify old sessions.
                 isEditMode = isNewSession
+                if isNewSession, let settings = userSettings.first {
+                    settings.activeWorkoutSessionId = session.id
+                    try? modelContext.save()
+                }
             }
             .sheet(isPresented: $isShowingExerciseSelection) {
                 ExerciseSelectionView { selectedExercise in
@@ -102,15 +105,32 @@ struct WorkoutLoggerView: View {
                 let hasFailure = wEx.sets.contains { $0.hitFailure }
                 
                 NavigationLink(destination: ActiveExerciseView(workoutExercise: wEx, isEditMode: isEditMode)) {
-                    HStack {
+                    HStack(spacing: 12) {
+                        if let groupId = wEx.supersetGroupId {
+                            let color = Color(hue: Double(abs(groupId.hashValue) % 100) / 100.0, saturation: 0.8, brightness: 0.9)
+                            Rectangle()
+                                .fill(color)
+                                .frame(width: 4)
+                                .cornerRadius(2)
+                                .padding(.vertical, 4)
+                        }
+                        
                         VStack(alignment: .leading) {
                             Text(wEx.loggedName.isEmpty ? (wEx.exerciseRef?.name ?? "Unknown") : wEx.loggedName)
                                 .font(.headline)
                                 .foregroundColor(Theme.textPrimary)
                                 .shadow(color: hasFailure ? Theme.dangerRed.opacity(0.8) : .clear, radius: 4)
-                            Text("\(wEx.sets.count) Sets")
-                                .font(.caption)
-                                .foregroundColor(Theme.textSecondary)
+                            
+                            HStack(spacing: 6) {
+                                Text("\(wEx.sets.count) Sets")
+                                if wEx.supersetGroupId != nil {
+                                    Text("• Superset")
+                                        .foregroundColor(Theme.accent)
+                                        .font(Theme.Typography.technical(8, weight: .bold))
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundColor(Theme.textSecondary)
                         }
                         Spacer()
                         if hasFailure {
@@ -124,6 +144,15 @@ struct WorkoutLoggerView: View {
                     }
                 }
                 .listRowBackground(Theme.surface)
+                .contextMenu {
+                    if isEditMode {
+                        Button(action: {
+                            toggleSupersetLink(for: wEx)
+                        }) {
+                            Label(wEx.supersetGroupId == nil ? "Link as Superset" : "Unlink Superset", systemImage: "link")
+                        }
+                    }
+                }
             }
             .onDelete(perform: deleteExercise)
         }
@@ -139,7 +168,7 @@ struct WorkoutLoggerView: View {
             }) {
                 HStack {
                     Image(systemName: "plus")
-                    Text("ADD EXERCISE")
+                    Text("Add Exercise")
                         .font(Theme.Typography.technical(14, weight: .bold))
                 }
                 .foregroundColor(Theme.accent)
@@ -155,7 +184,7 @@ struct WorkoutLoggerView: View {
             .padding()
             
             Button(action: finishWorkout) {
-                Text(session.endTime == nil ? "FINISH WORKOUT" : "SAVE EDITS")
+                Text(session.endTime == nil ? "Finish Workout" : "Save Edits")
                     .font(Theme.Typography.technical(16, weight: .black))
                     .foregroundColor(Theme.midnightMatte)
                     .frame(maxWidth: .infinity)
@@ -181,6 +210,9 @@ struct WorkoutLoggerView: View {
         if isEditMode {
             Button("Cancel") {
                 if session.endTime == nil {
+                    if let settings = userSettings.first {
+                        settings.activeWorkoutSessionId = nil
+                    }
                     modelContext.delete(session) // Rollback only if it's a new unfinished session
                 } else {
                     isEditMode = false // Turn off edit mode without saving new edits
@@ -197,17 +229,33 @@ struct WorkoutLoggerView: View {
         }
     }
     
-    private func deleteExercise(offsets: IndexSet) {
-        guard isEditMode else { return }
-        for index in offsets {
-            let ex = session.exercises[index]
-            modelContext.delete(ex)
+    private func toggleSupersetLink(for exercise: WorkoutExercise) {
+        guard let index = session.exercises.firstIndex(where: { $0.id == exercise.id }) else { return }
+        
+        if exercise.supersetGroupId == nil {
+            if index + 1 < session.exercises.count {
+                let nextExercise = session.exercises[index + 1]
+                let newGroupId = UUID()
+                exercise.supersetGroupId = newGroupId
+                nextExercise.supersetGroupId = newGroupId
+            }
+        } else {
+            let oldGroupId = exercise.supersetGroupId
+            for ex in session.exercises {
+                if ex.supersetGroupId == oldGroupId {
+                    ex.supersetGroupId = nil
+                }
+            }
         }
-        session.exercises.remove(atOffsets: offsets)
+        try? modelContext.save()
+        HapticManager.shared.playSelection()
     }
     
     private func finishWorkout() {
         if session.exercises.isEmpty && session.endTime == nil {
+            if let settings = userSettings.first {
+                settings.activeWorkoutSessionId = nil
+            }
             modelContext.delete(session)
             dismiss()
             return
@@ -216,6 +264,24 @@ struct WorkoutLoggerView: View {
         if session.endTime == nil {
             // Finalizing a brand new session
             session.endTime = Date()
+            
+            // Auto-tag Fasted Grind
+            if let activeFast = fastingSessions.first(where: { !$0.isCompleted }) {
+                let elapsed = Date().timeIntervalSince(activeFast.startTime)
+                let hours = elapsed / 3600.0
+                let phaseTitle = fastingPhaseTitle(for: hours)
+                
+                let defaultNames = ["Late Night Grind", "Morning Grind", "Afternoon Grind", "Workout Session", "New Grind"]
+                if defaultNames.contains(session.name) || session.name.isEmpty {
+                    session.name = "Fasted Workout"
+                } else if !session.name.contains("Fasted") {
+                    session.name += " (Fasted)"
+                }
+            }
+            
+            if let settings = userSettings.first {
+                settings.activeWorkoutSessionId = nil
+            }
             try? modelContext.save()
             
             if userSettings.first?.isHealthKitSyncEnabled == true {
@@ -247,42 +313,72 @@ struct WorkoutLoggerView: View {
     private var operationalSummaryHUD: some View {
         let totalTonnage = session.exercises.flatMap { $0.sets }.filter { $0.isCompleted }.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
         let failureCount = session.exercises.flatMap { $0.sets }.filter { $0.hitFailure }.count
+        let isFasting = fastingSessions.contains(where: { !$0.isCompleted })
         
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("SESSION TONNAGE")
-                    .font(Theme.Typography.technical(10, weight: .bold))
-                    .foregroundColor(Theme.textSecondary)
-                Text("\(totalTonnage, specifier: "%.1f")")
-                    .font(Theme.Typography.technical(14, weight: .black))
-                    .monospacedDigit()
-                    .foregroundColor(Theme.textPrimary)
+        VStack(spacing: 0) {
+            if let activeFast = fastingSessions.first(where: { !$0.isCompleted }) {
+                let elapsed = Date().timeIntervalSince(activeFast.startTime)
+                let hours = elapsed / 3600.0
+                let phaseTitle = fastingPhaseTitle(for: hours)
+                
+                HStack {
+                    Image(systemName: "flame.fill")
+                        .foregroundColor(Theme.dangerRed)
+                    Text("Fasted Workout Active")
+                        .font(Theme.Typography.technical(9, weight: .black))
+                        .foregroundColor(Theme.dangerRed)
+                    Spacer()
+                    Text("\(formatFastingDuration(elapsed)) // \(phaseTitle) Phase")
+                        .font(Theme.Typography.technical(9, weight: .bold))
+                        .foregroundColor(Theme.textSecondary)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(Theme.dangerRed.opacity(0.12))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Theme.border.opacity(0.3))
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                )
             }
-            Spacer()
-            VStack(alignment: .center, spacing: 4) {
-                Text("INTENSITY SCORE")
-                    .font(Theme.Typography.technical(10, weight: .bold))
-                    .foregroundColor(Theme.textSecondary)
-                Text("\(session.totalIntensityScore)")
-                    .font(Theme.Typography.technical(14, weight: .black))
-                    .monospacedDigit()
-                    .foregroundColor(Theme.accent)
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Session Tonnage")
+                        .font(Theme.Typography.technical(10, weight: .bold))
+                        .foregroundColor(Theme.textSecondary)
+                    Text("\(totalTonnage, specifier: "%.1f")")
+                        .font(Theme.Typography.technical(14, weight: .black))
+                        .monospacedDigit()
+                        .foregroundColor(Theme.textPrimary)
+                }
+                Spacer()
+                VStack(alignment: .center, spacing: 4) {
+                    Text("Intensity Score")
+                        .font(Theme.Typography.technical(10, weight: .bold))
+                        .foregroundColor(Theme.textSecondary)
+                    Text("\(session.totalIntensityScore)")
+                        .font(Theme.Typography.technical(14, weight: .black))
+                        .monospacedDigit()
+                        .foregroundColor(Theme.accent)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Failure Count")
+                        .font(Theme.Typography.technical(10, weight: .bold))
+                        .foregroundColor(Theme.textSecondary)
+                    Text("\(failureCount)")
+                        .font(Theme.Typography.technical(14, weight: .black))
+                        .monospacedDigit()
+                        .foregroundColor(failureCount > 0 ? Theme.dangerRed : Theme.textPrimary)
+                }
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("FAILURE COUNT")
-                    .font(Theme.Typography.technical(10, weight: .bold))
-                    .foregroundColor(Theme.textSecondary)
-                Text("\(failureCount)")
-                    .font(Theme.Typography.technical(14, weight: .black))
-                    .monospacedDigit()
-                    .foregroundColor(failureCount > 0 ? Theme.dangerRed : Theme.textPrimary)
-            }
+            .padding(.horizontal)
+            .padding(.top, 12)
+            .padding(.bottom, 20)
         }
-        .padding(.horizontal)
-        .padding(.top, 12)
-        .padding(.bottom, 20)
-        .frame(height: 80)
+        .frame(height: isFasting ? 108 : 80)
         .background(.ultraThinMaterial)
         .overlay(
             Rectangle()
@@ -290,6 +386,24 @@ struct WorkoutLoggerView: View {
                 .foregroundColor(Theme.border)
                 .frame(maxHeight: .infinity, alignment: .top)
         )
+    }
+    
+    private func fastingPhaseTitle(for hours: Double) -> String {
+        if hours < 4 { return "Sugar Burner" }
+        if hours < 12 { return "Glycogen Drain" }
+        if hours < 16 { return "Ketosis Ignited" }
+        return "Deep Autophagy"
+    }
+    
+    private func formatFastingDuration(_ seconds: TimeInterval) -> String {
+        let hrs = Int(seconds) / 3600
+        let mins = (Int(seconds) % 3600) / 60
+        return String(format: "%02dH %02dM", hrs, mins)
+    }
+    
+    private func deleteExercise(at offsets: IndexSet) {
+        session.exercises.remove(atOffsets: offsets)
+        try? modelContext.save()
     }
 }
 

@@ -6,9 +6,16 @@ struct PhysiqueVaultView: View {
     @Binding var isPresented: Bool
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PhysiquePhoto.timestamp, order: .reverse) private var photos: [PhysiquePhoto]
+    @Query private var userSettings: [UserSettings]
     
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var isProcessingPhoto = false
+    @State private var isShowingCamera = false
+    
+    // Export Status
+    @State private var isSavingCard = false
+    @State private var showToast = false
+    @State private var toastMessage = ""
     
     enum VaultTab: Int {
         case gallery = 0
@@ -29,9 +36,9 @@ struct PhysiqueVaultView: View {
                 VStack(spacing: 0) {
                     if !photos.isEmpty {
                         Picker("Vault Mode", selection: $selectedTab) {
-                            Text("GALLERY").tag(VaultTab.gallery)
-                            Text("COMPARE").tag(VaultTab.compare)
-                            Text("TIMELAPSE").tag(VaultTab.timelapse)
+                            Text("Gallery").tag(VaultTab.gallery)
+                            Text("Compare").tag(VaultTab.compare)
+                            Text("Timelapse").tag(VaultTab.timelapse)
                         }
                         .pickerStyle(.segmented)
                         .padding(.horizontal)
@@ -45,7 +52,7 @@ struct PhysiqueVaultView: View {
                             Image(systemName: "photo.on.rectangle.angled")
                                 .font(.system(size: 64))
                                 .foregroundColor(Theme.textSecondary)
-                            Text("VAULT EMPTY")
+                            Text("Vault Empty")
                                 .font(Theme.Typography.technical(16, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                             Text("Log your first physique photo to start tracking visual progression.")
@@ -101,14 +108,57 @@ struct PhysiqueVaultView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if selectedTab == .gallery {
-                        PhotosPicker(selection: $selectedPhotoItem, matching: .images, photoLibrary: .shared()) {
-                            Image(systemName: "plus")
-                                .font(.headline)
-                                .foregroundColor(Theme.accent)
+                        HStack(spacing: 16) {
+                            Button(action: {
+                                HapticManager.shared.playSelection()
+                                isShowingCamera = true
+                            }) {
+                                Image(systemName: "camera.fill")
+                                    .font(.headline)
+                                    .foregroundColor(Theme.accent)
+                            }
+                            
+                            PhotosPicker(selection: $selectedPhotoItem, matching: .images, photoLibrary: .shared()) {
+                                Image(systemName: "plus")
+                                    .font(.headline)
+                                    .foregroundColor(Theme.accent)
+                            }
                         }
                     }
                 }
             }
+            .fullScreenCover(isPresented: $isShowingCamera) {
+                CameraCaptureView(
+                    previousPhoto: photos.first,
+                    currentWeight: userSettings.first?.bodyWeight ?? 0.0,
+                    currentPhase: userSettings.first?.currentPhase ?? "N/A"
+                )
+            }
+            .overlay(
+                Group {
+                    if showToast {
+                        VStack {
+                            Spacer()
+                            Text(toastMessage)
+                                .font(Theme.Typography.technical(10, weight: .bold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(Theme.accent)
+                                .cornerRadius(8)
+                                .shadow(radius: 6)
+                                .padding(.bottom, 24)
+                                .onAppear {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                                        showToast = false
+                                    }
+                                }
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring, value: showToast)
+                    }
+                }
+            )
             .onChange(of: selectedPhotoItem) { _, newItem in
                 Task {
                     if let newItem = newItem {
@@ -215,28 +265,74 @@ struct PhysiqueVaultView: View {
                     .padding()
                 }
             } else {
-                // Curtain Slider View
                 if let p1 = photoOne, let p2 = photoTwo {
                     let sorted = [p1, p2].sorted(by: { $0.timestamp < $1.timestamp })
-                    BeforeAfterSliderView(photoBefore: sorted[0], photoAfter: sorted[1])
-                        .padding()
+                    
+                    VStack(spacing: 12) {
+                        BeforeAfterSliderView(photoBefore: sorted[0], photoAfter: sorted[1])
+                            .padding(.horizontal)
+                        
+                        HStack(spacing: 16) {
+                            // Reset selections button
+                            Button(action: {
+                                photoOne = nil
+                                photoTwo = nil
+                            }) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.headline)
+                                    .foregroundColor(Theme.textPrimary)
+                                    .padding()
+                                    .background(Theme.surface)
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Theme.border, lineWidth: 1)
+                                    )
+                            }
+                            
+                            // Save Card Button
+                            Button(action: {
+                                isSavingCard = true
+                                HapticManager.shared.playSelection()
+                                
+                                ComparisonCardExporter.shared.exportBeforeAfterCard(
+                                    photoBefore: sorted[0],
+                                    photoAfter: sorted[1]
+                                ) { success, error in
+                                    isSavingCard = false
+                                    if success {
+                                        HapticManager.shared.playSuccess()
+                                        toastMessage = "Progress card saved to Apple Photos!"
+                                        showToast = true
+                                    } else {
+                                        HapticManager.shared.playHeavyImpact()
+                                        toastMessage = error ?? "Failed to save card."
+                                        showToast = true
+                                    }
+                                }
+                            }) {
+                                HStack(spacing: 8) {
+                                    if isSavingCard {
+                                        ProgressView()
+                                            .tint(.black)
+                                    } else {
+                                        Image(systemName: "square.and.arrow.down.fill")
+                                    }
+                                    Text(isSavingCard ? "Saving..." : "Export Card to Photos")
+                                        .font(Theme.Typography.technical(14, weight: .bold))
+                                }
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Theme.accent)
+                                .cornerRadius(12)
+                                .shadow(color: Theme.accent.opacity(0.3), radius: 8, x: 0, y: 4)
+                            }
+                            .disabled(isSavingCard)
+                        }
+                        .padding(.horizontal)
+                    }
                 }
-                
-                Spacer()
-                
-                Button(action: {
-                    photoOne = nil
-                    photoTwo = nil
-                }) {
-                    Text("SELECT NEW PHOTOS")
-                        .font(Theme.Typography.technical(14, weight: .bold))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Theme.accent)
-                        .cornerRadius(12)
-                }
-                .padding()
             }
         }
     }
@@ -266,7 +362,7 @@ struct PhysiqueVaultView: View {
                 }
                 
                 if photo.phaseAtTime != "N/A" {
-                    Text(photo.phaseAtTime.uppercased())
+                    Text(photo.phaseAtTime)
                         .font(Theme.Typography.technical(10, weight: .bold))
                         .foregroundColor(Theme.textSecondary)
                 }

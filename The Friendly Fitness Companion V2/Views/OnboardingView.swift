@@ -51,7 +51,7 @@ struct OnboardingView: View {
                 // Navigation Footer
                 HStack {
                     if currentStep > 0 {
-                        Button("BACK") {
+                        Button("Back") {
                             withAnimation { currentStep -= 1 }
                         }
                         .font(Theme.Typography.technical(14, weight: .bold))
@@ -69,7 +69,7 @@ struct OnboardingView: View {
                             completeOnboarding()
                         }
                     }) {
-                        Text(currentStep == 4 ? "INITIALIZE SYSTEM" : "NEXT")
+                        Text(currentStep == 4 ? "Get Started" : "Next")
                             .font(Theme.Typography.technical(14, weight: .bold))
                             .foregroundColor(Theme.midnightMatte)
                             .padding(.vertical, 16)
@@ -96,12 +96,12 @@ struct OnboardingView: View {
                 .shadow(color: Theme.warningOrange.opacity(0.5), radius: 20)
                 .padding(.bottom, 20)
             
-            Text("THE COMMAND CENTER")
+            Text("The Friendly Fitness Companion")
                 .font(Theme.Typography.technical(24, weight: .black))
                 .foregroundColor(Theme.textPrimary)
                 .tracking(2)
             
-            Text("Welcome to your new operating system. We have stripped away the noise so you can focus entirely on the iron. Let's configure your baseline.")
+            Text("Welcome to your personal fitness companion. Let's configure your training profile to tailor the experience to your goals.")
                 .font(Theme.Typography.technical(16))
                 .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -114,7 +114,7 @@ struct OnboardingView: View {
     private var identityStep: some View {
         VStack(alignment: .leading, spacing: 32) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("OPERATOR DESIGNATION")
+                Text("What is your name?")
                     .font(Theme.Typography.technical(14, weight: .bold))
                     .foregroundColor(Theme.accent)
                     .tracking(1)
@@ -128,7 +128,7 @@ struct OnboardingView: View {
             }
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("CURRENT MASS")
+                Text("Current Weight")
                     .font(Theme.Typography.technical(14, weight: .bold))
                     .foregroundColor(Theme.accent)
                     .tracking(1)
@@ -159,13 +159,13 @@ struct OnboardingView: View {
     
     private var objectiveStep: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("PRIMARY DIRECTIVE")
+            Text("Select Training Phase")
                 .font(Theme.Typography.technical(14, weight: .bold))
                 .foregroundColor(Theme.accent)
                 .tracking(1)
                 .padding(.horizontal, 32)
             
-            Text("Select your current training phase. This determines your baseline macro targets.")
+            Text("Select your current training phase. This determines your baseline targets.")
                 .font(Theme.Typography.technical(14))
                 .foregroundColor(Theme.textSecondary)
                 .padding(.horizontal, 32)
@@ -174,7 +174,7 @@ struct OnboardingView: View {
                 ForEach(phases, id: \.self) { phase in
                     Button(action: { selectedPhase = phase }) {
                         HStack {
-                            Text(phase.uppercased())
+                            Text(phase)
                                 .font(Theme.Typography.technical(16, weight: .bold))
                                 .foregroundColor(selectedPhase == phase ? Theme.midnightMatte : Theme.textPrimary)
                             Spacer()
@@ -195,12 +195,12 @@ struct OnboardingView: View {
     
     private var hapticsStep: some View {
         VStack(alignment: .leading, spacing: 32) {
-            Text("GRIND ENGINE CONFIG")
+            Text("Workout Settings")
                 .font(Theme.Typography.technical(14, weight: .bold))
                 .foregroundColor(Theme.warningOrange)
                 .tracking(1)
             
-            Text("This app relies heavily on physical haptics to guide your intensity without requiring you to stare at the screen.")
+            Text("This app relies on physical haptics to guide your intensity without requiring you to stare at the screen.")
                 .font(Theme.Typography.technical(14))
                 .foregroundColor(Theme.textSecondary)
             
@@ -238,7 +238,7 @@ struct OnboardingView: View {
     
     private var healthKitStep: some View {
         VStack(alignment: .leading, spacing: 32) {
-            Text("SYSTEMS INTEGRATION")
+            Text("Integrate with Health")
                 .font(Theme.Typography.technical(14, weight: .bold))
                 .foregroundColor(Theme.apexGreen)
                 .tracking(1)

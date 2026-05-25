@@ -1,19 +1,26 @@
 import SwiftUI
 import SwiftData
 import Charts
+import Combine
 
 struct DashboardView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \WorkoutSession.timestamp, order: .reverse) private var recentSessions: [WorkoutSession]
     @Query private var userSettings: [UserSettings]
+    @Query(sort: \FastingSession.startTime, order: .reverse) private var fastingSessions: [FastingSession]
+    
     @State private var isShowingFastingToolbox = false
     @State private var isShowingHelp = false
     @State private var selectedMuscle: String? = nil
     @State private var isShowingMuscleDetail = false
+    @State private var liveFastingElapsed: TimeInterval = 0
+    private let fastingTimerPublisher = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
     
     // HealthKit metrics states
     @State private var liveHRV: Double? = nil
     @State private var liveSleep: Double? = nil
     @State private var isHealthKitAuthorized = false
+    @State private var heatmapMode: AnatomicalBodyMap.HeatmapMode = .recovery
     
     // Custom bindings for manual overrides
     private var manualScoreBinding: Binding<Double> {
@@ -51,12 +58,30 @@ struct DashboardView: View {
             let daysAgo = Calendar.current.dateComponents([.day], from: session.timestamp, to: now).day ?? 0
             
             for workoutEx in session.exercises {
-                let muscle = workoutEx.loggedTargetMuscle.isEmpty ? (workoutEx.exerciseRef?.targetMuscle ?? "UNKNOWN") : workoutEx.loggedTargetMuscle
+                let muscle = workoutEx.normalizedTargetMuscle
                 if muscle != "UNKNOWN" {
                     // Only keep the most recent (smallest daysAgo) because sessions are sorted descending
                     if map[muscle] == nil {
                         map[muscle] = daysAgo
                     }
+                }
+            }
+        }
+        return map
+    }
+    
+    // Calculates total sets completed per muscle group over the last 7 days
+    private var activationMap: [String: Int] {
+        var map: [String: Int] = [:]
+        let now = Date()
+        let oneWeekAgo = Calendar.current.date(byAdding: .day, value: -7, to: now) ?? now
+        
+        for session in recentSessions where session.timestamp >= oneWeekAgo {
+            for workoutEx in session.exercises {
+                let muscle = workoutEx.normalizedTargetMuscle
+                if muscle != "UNKNOWN" {
+                    let completedSets = workoutEx.sets.filter { $0.isCompleted }.count
+                    map[muscle, default: 0] += completedSets
                 }
             }
         }
@@ -83,7 +108,7 @@ struct DashboardView: View {
         
         for session in recentSessions where session.timestamp >= oneWeekAgo {
             for wex in session.exercises {
-                let muscle = wex.loggedTargetMuscle.isEmpty ? (wex.exerciseRef?.targetMuscle ?? "UNKNOWN") : wex.loggedTargetMuscle
+                let muscle = wex.normalizedTargetMuscle
                 if muscle != "UNKNOWN" {
                     let volume = wex.sets.reduce(0.0) { $0 + ($1.weight * Double($1.reps)) }
                     map[muscle, default: 0.0] += volume
@@ -128,7 +153,7 @@ struct DashboardView: View {
     }
     
     private var overallRecoveryScore: Int {
-        let muscles = ["Abs", "Back", "Biceps", "Calves", "Chest", "Glutes", "Hamstrings", "Quads", "Shoulders", "Triceps"]
+        let muscles = MuscleGroup.all
         let recMap = recoveryMap
         var totalPoints = 0
         
@@ -215,96 +240,268 @@ struct DashboardView: View {
                         }
                         .padding(.horizontal)
                         
-                        // Recovery Energy Bar
-                        VStack(alignment: .leading, spacing: 8) {
+                        // Active Fasting Tracker
+                        if let fast = activeFast {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    Image(systemName: "clock.fill")
+                                        .foregroundColor(Theme.accent)
+                                    Text("ACTIVE FASTING")
+                                        .font(Theme.Typography.technical(12, weight: .bold))
+                                        .foregroundColor(Theme.textSecondary)
+                                        .tracking(1.5)
+                                    
+                                    Spacer()
+                                    
+                                    let hours = liveFastingElapsed / 3600.0
+                                    let phaseInfo = fastingPhaseInfo(for: hours)
+                                    
+                                    Text(phaseInfo.title)
+                                        .font(Theme.Typography.technical(10, weight: .bold))
+                                        .foregroundColor(phaseInfo.color)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(phaseInfo.color.opacity(0.12))
+                                        .cornerRadius(8)
+                                }
+                                
+                                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                                    Text(formatFastingDuration(liveFastingElapsed))
+                                        .font(Theme.Typography.technical(32, weight: .black))
+                                        .monospacedDigit()
+                                        .foregroundColor(Theme.textPrimary)
+                                    
+                                    Text("/ \(fast.targetHours)H Target")
+                                        .font(Theme.Typography.technical(12, weight: .bold))
+                                        .foregroundColor(Theme.textSecondary)
+                                }
+                                
+                                // Quick progress bar (Capsule design)
+                                let progress = min(liveFastingElapsed / (Double(fast.targetHours) * 3600.0), 1.0)
+                                let hours = liveFastingElapsed / 3600.0
+                                let phaseInfo = fastingPhaseInfo(for: hours)
+                                
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        Capsule()
+                                            .fill(Theme.border)
+                                            .frame(height: 6)
+                                        
+                                        Capsule()
+                                            .fill(phaseInfo.color)
+                                            .frame(width: geo.size.width * CGFloat(progress), height: 6)
+                                    }
+                                }
+                                .frame(height: 6)
+                                
+                                HStack {
+                                    Button(action: {
+                                        HapticManager.shared.playSelection()
+                                        isShowingFastingToolbox = true
+                                    }) {
+                                        Text("Open Tracker")
+                                            .font(Theme.Typography.technical(12, weight: .bold))
+                                            .foregroundColor(Theme.accent)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(Theme.accent.opacity(0.1))
+                                            .cornerRadius(10)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: {
+                                        HapticManager.shared.playHeavyImpact()
+                                        fast.isCompleted = true
+                                        fast.endTime = Date()
+                                        try? modelContext.save()
+                                    }) {
+                                        Text("End Fast")
+                                            .font(Theme.Typography.technical(12, weight: .bold))
+                                            .foregroundColor(Theme.dangerRed)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(Theme.dangerRed.opacity(0.1))
+                                            .cornerRadius(10)
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
+                            .padding()
+                            .background(Theme.surface)
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Theme.border, lineWidth: 1)
+                            )
+                            .padding(.horizontal)
+                        } else {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack {
+                                    Image(systemName: "clock")
+                                        .foregroundColor(Theme.textSecondary)
+                                    Text("FASTING STATUS")
+                                        .font(Theme.Typography.technical(12, weight: .bold))
+                                        .foregroundColor(Theme.textSecondary)
+                                        .tracking(1.5)
+                                    Spacer()
+                                    
+                                    let completedThisWeek = fastingSessions.filter {
+                                        let calendar = Calendar.current
+                                        let today = Date()
+                                        let oneWeekAgo = calendar.date(byAdding: .day, value: -7, to: today) ?? today
+                                        return $0.isCompleted && $0.startTime >= oneWeekAgo
+                                    }.count
+                                    
+                                    Text("\(completedThisWeek) fasts this week")
+                                        .font(Theme.Typography.technical(10, weight: .bold))
+                                        .foregroundColor(Theme.accent)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(Theme.accent.opacity(0.12))
+                                        .cornerRadius(8)
+                                }
+                                
+                                Text("No active fast. Establish a tracking interval to initiate lipid oxidation.")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(Theme.textSecondary)
+                                    .lineLimit(2)
+                                
+                                HStack(spacing: 8) {
+                                    ForEach([12, 16, 18, 20], id: \.self) { targetHours in
+                                        Button(action: {
+                                            HapticManager.shared.playSuccess()
+                                            let newFast = FastingSession(targetHours: targetHours)
+                                            modelContext.insert(newFast)
+                                            try? modelContext.save()
+                                        }) {
+                                            Text("\(targetHours)H")
+                                                .font(Theme.Typography.technical(12, weight: .bold))
+                                                .foregroundColor(Theme.textPrimary)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 10)
+                                                .background(Theme.midnightMatte)
+                                                .cornerRadius(10)
+                                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
+                                        }
+                                    }
+                                    
+                                    Button(action: {
+                                        HapticManager.shared.playSelection()
+                                        isShowingFastingToolbox = true
+                                    }) {
+                                        Image(systemName: "ellipsis")
+                                            .font(.subheadline.bold())
+                                            .foregroundColor(Theme.accent)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 10)
+                                            .background(Theme.midnightMatte)
+                                            .cornerRadius(10)
+                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
+                                    }
+                                }
+                            }
+                            .padding()
+                            .background(Theme.surface)
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Theme.border, lineWidth: 1)
+                            )
+                            .padding(.horizontal)
+                        }
+                        
+                        // Recovery Readiness Card
+                        VStack(alignment: .leading, spacing: 12) {
                             HStack {
-                                Text("SYSTEM RECOVERY LEVEL")
-                                    .font(Theme.Typography.technical(10, weight: .bold))
+                                Text("RECOVERY READINESS")
+                                    .font(Theme.Typography.technical(12, weight: .bold))
                                     .foregroundColor(Theme.textSecondary)
                                     .tracking(1.5)
                                 Spacer()
                                 Text("\(activeRecoveryScore)%")
-                                    .font(Theme.Typography.technical(12, weight: .black))
+                                    .font(Theme.Typography.technical(14, weight: .black))
                                     .foregroundColor(activeRecoveryScore > 75 ? Theme.apexGreen : (activeRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed))
                             }
                             
-                            // Visual bar
+                            // Visual bar (Capsule style)
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill(Theme.surface)
+                                    Capsule()
+                                        .fill(Theme.border)
                                         .frame(height: 8)
                                     
-                                    RoundedRectangle(cornerRadius: 3)
+                                    Capsule()
                                         .fill(activeRecoveryScore > 75 ? Theme.apexGreen : (activeRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed))
                                         .frame(width: geo.size.width * CGFloat(Double(activeRecoveryScore) / 100.0), height: 8)
-                                        .shadow(color: (activeRecoveryScore > 75 ? Theme.apexGreen : (activeRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed)).opacity(0.5), radius: 3, x: 0, y: 0)
+                                        .shadow(color: (activeRecoveryScore > 75 ? Theme.apexGreen : (activeRecoveryScore > 45 ? Theme.warningOrange : Theme.dangerRed)).opacity(0.3), radius: 4, x: 0, y: 2)
                                 }
                             }
                             .frame(height: 8)
                             
                             // HealthKit / Manual override controls
                             VStack(spacing: 12) {
-                                Divider().background(Theme.border.opacity(0.2))
+                                Divider().background(Theme.border)
                                 
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text("HEALTHKIT TELEMETRY")
-                                            .font(Theme.Typography.technical(9, weight: .bold))
+                                        Text("HEALTH DATA")
+                                            .font(Theme.Typography.technical(10, weight: .bold))
                                             .foregroundColor(Theme.textSecondary)
                                         
                                         HStack(spacing: 12) {
                                             HStack(spacing: 4) {
-                                                Image(systemName: "heart.text.square.fill")
+                                                Image(systemName: "heart.fill")
                                                     .foregroundColor(Theme.dangerRed)
-                                                Text(liveHRV != nil ? "\(Int(liveHRV!)) ms" : "NO DATA")
+                                                Text(liveHRV != nil ? "\(Int(liveHRV!)) ms" : "No Data")
                                             }
                                             
                                             HStack(spacing: 4) {
                                                 Image(systemName: "bed.double.fill")
                                                     .foregroundColor(Theme.accent)
-                                                Text(liveSleep != nil ? String(format: "%.1f hrs", liveSleep!) : "NO DATA")
+                                                Text(liveSleep != nil ? String(format: "%.1f hrs", liveSleep!) : "No Data")
                                             }
                                         }
-                                        .font(Theme.Typography.technical(11, weight: .bold))
+                                        .font(Theme.Typography.technical(12, weight: .bold))
+                                        .foregroundColor(Theme.textPrimary)
                                     }
                                     
                                     Spacer()
                                     
                                     Toggle(isOn: isOverriddenBinding) {
-                                        Text("OVERRIDE")
-                                            .font(Theme.Typography.technical(10, weight: .black))
+                                        Text("Override")
+                                            .font(Theme.Typography.technical(11, weight: .bold))
                                             .foregroundColor(isOverriddenBinding.wrappedValue ? Theme.accent : Theme.textSecondary)
                                     }
                                     .toggleStyle(SwitchToggleStyle(tint: Theme.accent))
-                                    .labelsHidden()
                                 }
                                 
                                 if isOverriddenBinding.wrappedValue {
-                                    VStack(alignment: .leading, spacing: 4) {
+                                    VStack(alignment: .leading, spacing: 6) {
                                         HStack {
-                                            Text("MANUAL READINESS OVERRIDE:")
-                                                .font(Theme.Typography.technical(9, weight: .bold))
+                                            Text("Manual Override")
+                                                .font(Theme.Typography.technical(11, weight: .bold))
                                                 .foregroundColor(Theme.accent)
                                             Spacer()
                                             Text("\(Int(manualScoreBinding.wrappedValue * 100))%")
-                                                .font(Theme.Typography.technical(11, weight: .black))
+                                                .font(Theme.Typography.technical(12, weight: .black))
                                                 .foregroundColor(Theme.accent)
                                         }
                                         
                                         Slider(value: manualScoreBinding, in: 0.0...1.0, step: 0.05)
                                             .accentColor(Theme.accent)
                                     }
+                                    .padding(.top, 4)
                                 }
                             }
                             .padding(.top, 4)
                         }
                         .padding()
-                        .background(Theme.surface.opacity(0.5))
-                        .cornerRadius(12)
+                        .background(Theme.surface)
+                        .cornerRadius(16)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Theme.border.opacity(0.15), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Theme.border, lineWidth: 1)
                         )
                         .padding(.horizontal)
                         
@@ -312,32 +509,32 @@ struct DashboardView: View {
                         AICoachWidgetView(insight: coachInsight)
                             .padding(.horizontal)
                         
-                        // Weekly Split Matrix
+                        // Weekly Activity Split
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("WEEKLY SPLIT MATRIX")
+                            Text("WEEKLY ACTIVITY")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
-                                .tracking(2)
+                                .tracking(1.5)
                                 .padding(.horizontal)
                             
                             HStack(spacing: 8) {
                                 ForEach(workoutsForWeekdays(), id: \.date) { day in
-                                    VStack(spacing: 6) {
+                                    VStack(spacing: 8) {
                                         Text(day.dayName)
-                                            .font(Theme.Typography.technical(10, weight: .bold))
-                                            .foregroundColor(day.hasWorkedOut ? .black : Theme.textSecondary)
+                                            .font(Theme.Typography.technical(11, weight: .bold))
+                                            .foregroundColor(day.hasWorkedOut ? .white : Theme.textSecondary)
                                         
                                         Circle()
-                                            .fill(day.hasWorkedOut ? Theme.accent : Color.clear)
-                                            .frame(width: 6, height: 6)
+                                            .fill(day.hasWorkedOut ? .white : Color.clear)
+                                            .frame(width: 4, height: 4)
                                     }
                                     .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
+                                    .padding(.vertical, 12)
                                     .background(day.hasWorkedOut ? Theme.accent : Theme.surface)
-                                    .cornerRadius(6)
+                                    .cornerRadius(12)
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .stroke(day.hasWorkedOut ? Theme.accent : Theme.border.opacity(0.2), lineWidth: 1)
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(day.hasWorkedOut ? Theme.accent : Theme.border, lineWidth: 1)
                                     )
                                 }
                             }
@@ -346,13 +543,27 @@ struct DashboardView: View {
                         
                         // Anatomical Heatmap
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("RECOVERY HEATMAP")
-                                .font(Theme.Typography.technical(14, weight: .bold))
-                                .foregroundColor(Theme.textSecondary)
-                                .tracking(2)
-                                .padding(.horizontal)
+                            HStack {
+                                Text(heatmapMode == .recovery ? "Recovery Heatmap" : "Activation Heatmap")
+                                    .font(Theme.Typography.technical(14, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                                    .tracking(1.5)
+                                
+                                Spacer()
+                                
+                                Picker("Heatmap Mode", selection: $heatmapMode) {
+                                    Text("Recovery").tag(AnatomicalBodyMap.HeatmapMode.recovery)
+                                    Text("Activation").tag(AnatomicalBodyMap.HeatmapMode.activation)
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 180)
+                            }
+                            .padding(.horizontal)
                             
-                            AnatomicalBodyMap(muscleRecoveryState: recoveryMap) { muscle in
+                            AnatomicalBodyMap(
+                                mode: heatmapMode,
+                                muscleState: heatmapMode == .recovery ? recoveryMap : activationMap
+                            ) { muscle in
                                 selectedMuscle = muscle
                                 isShowingMuscleDetail = true
                             }
@@ -360,18 +571,35 @@ struct DashboardView: View {
                             .padding()
                             .background(Theme.surface)
                             .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Theme.border, lineWidth: 1)
+                            )
                             .padding(.horizontal)
+                            
+                            // Map Legends
+                            HStack(spacing: 12) {
+                                if heatmapMode == .recovery {
+                                    legendItem(color: Theme.dangerRed, text: "Exhausted (<2d)")
+                                    legendItem(color: Theme.warningOrange, text: "Recovering (<4d)")
+                                    legendItem(color: Theme.apexGreen, text: "Recovered (4d+)")
+                                } else {
+                                    legendItem(color: Theme.border.opacity(0.8), text: "Under-stim (<4 sets)")
+                                    legendItem(color: Theme.warningOrange, text: "Optimal (4-9 sets)")
+                                    legendItem(color: Theme.apexGreen, text: "Fully-stim (10+ sets)")
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 4)
                         }
-                        
-                        // Volume Analytics Chart Removed
                         
                         // Intensity Trends Graph
                         if weeklySessionsSorted.count > 1 {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("INTENSITY TREND")
+                                Text("Intensity Trend")
                                     .font(Theme.Typography.technical(14, weight: .bold))
                                     .foregroundColor(Theme.textSecondary)
-                                    .tracking(2)
+                                    .tracking(1.5)
                                     .padding(.horizontal)
                                 
                                 Chart {
@@ -394,6 +622,10 @@ struct DashboardView: View {
                                 .padding()
                                 .background(Theme.surface)
                                 .cornerRadius(16)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Theme.border, lineWidth: 1)
+                                )
                                 .padding(.horizontal)
                                 .chartXAxis {
                                     AxisMarks(values: .stride(by: .day)) { _ in
@@ -412,40 +644,48 @@ struct DashboardView: View {
                         
                         // Recent Activity List
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("RECENT GRIND")
+                            Text("Recent Activity")
                                 .font(Theme.Typography.technical(14, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
-                                .tracking(2)
+                                .tracking(1.5)
                                 .padding(.horizontal)
                             
                             if recentSessions.isEmpty {
-                                Text("No workouts logged yet. Time to bleed.")
-                                    .font(Theme.Typography.technical(16))
+                                Text("No workouts logged yet. Start tracking your fitness journey.")
+                                    .font(Theme.Typography.technical(14))
                                     .foregroundColor(Theme.textSecondary)
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .center)
                                     .background(Theme.surface)
-                                    .cornerRadius(12)
+                                    .cornerRadius(16)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(Theme.border, lineWidth: 1)
+                                    )
                                     .padding(.horizontal)
                             } else {
                                 ForEach(recentSessions.prefix(3)) { session in
                                     HStack {
-                                        VStack(alignment: .leading) {
+                                        VStack(alignment: .leading, spacing: 4) {
                                             Text(session.name)
-                                                .font(.headline)
+                                                .font(.system(size: 16, weight: .bold, design: .rounded))
                                                 .foregroundColor(Theme.textPrimary)
                                             Text(session.timestamp.formatted(date: .abbreviated, time: .omitted))
-                                                .font(.caption)
+                                                .font(.system(size: 12, weight: .medium, design: .rounded))
                                                 .foregroundColor(Theme.textSecondary)
                                         }
                                         Spacer()
                                         Text("\(session.totalIntensityScore) pts")
-                                            .font(.subheadline.bold())
+                                            .font(.system(size: 14, weight: .bold, design: .rounded))
                                             .foregroundColor(Theme.accent)
                                     }
                                     .padding()
                                     .background(Theme.surface)
-                                    .cornerRadius(12)
+                                    .cornerRadius(16)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(Theme.border, lineWidth: 1)
+                                    )
                                     .padding(.horizontal)
                                 }
                             }
@@ -455,6 +695,14 @@ struct DashboardView: View {
                 }
                 .onAppear {
                     loadHealthKitTelemetry()
+                    if let activeFast = activeFast {
+                        liveFastingElapsed = Date().timeIntervalSince(activeFast.startTime)
+                    }
+                }
+                .onReceive(fastingTimerPublisher) { _ in
+                    if let activeFast = activeFast {
+                        liveFastingElapsed = Date().timeIntervalSince(activeFast.startTime)
+                    }
                 }
             }
             .navigationTitle("Dashboard")
@@ -504,6 +752,34 @@ struct DashboardView: View {
             }
         }
     }
+    
+    private var activeFast: FastingSession? {
+        fastingSessions.first(where: { !$0.isCompleted })
+    }
+    
+    private func fastingPhaseInfo(for hours: Double) -> (title: String, color: Color) {
+        if hours < 4 { return ("Sugar Burner", Theme.accent) }
+        if hours < 12 { return ("Glycogen Drain", Theme.warningOrange) }
+        if hours < 16 { return ("Ketosis Ignited", Theme.dangerRed) }
+        return ("Deep Autophagy", .purple)
+    }
+    
+    private func formatFastingDuration(_ seconds: TimeInterval) -> String {
+        let hrs = Int(seconds) / 3600
+        let mins = (Int(seconds) % 3600) / 60
+        return String(format: "%02dH %02dM", hrs, mins)
+    }
+    
+    private func legendItem(color: Color, text: String) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(text)
+                .font(Theme.Typography.technical(10, weight: .bold))
+                .foregroundColor(Theme.textSecondary)
+        }
+    }
 }
 
 struct AICoachWidgetView: View {
@@ -517,14 +793,14 @@ struct AICoachWidgetView: View {
                     .frame(width: 8, height: 8)
                     .shadow(color: (insight.capacityScore >= 80 ? Theme.apexGreen : (insight.capacityScore >= 50 ? Theme.warningOrange : Theme.dangerRed)), radius: 4)
                 
-                Text("COACH CO-PILOT")
+                Text("Coach Recommendation")
                     .font(Theme.Typography.technical(12, weight: .bold))
                     .foregroundColor(Theme.textPrimary)
                     .tracking(2.0)
                 
                 Spacer()
                 
-                Text(insight.focusMuscle.uppercased() + " DAY")
+                Text("\(insight.focusMuscle) Day")
                     .font(Theme.Typography.technical(10, weight: .bold))
                     .foregroundColor(Theme.accent)
                     .padding(.horizontal, 8)
@@ -598,7 +874,7 @@ struct StatCard: View {
             HStack {
                 Image(systemName: icon)
                     .foregroundColor(color)
-                Text(title.uppercased())
+                Text(title)
                     .font(Theme.Typography.technical(12, weight: .bold))
                     .foregroundColor(Theme.textSecondary)
             }

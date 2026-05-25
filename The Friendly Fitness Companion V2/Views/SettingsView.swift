@@ -29,7 +29,7 @@ struct SettingsView: View {
                         
                         // Section: Grind Engine
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("THE GRIND ENGINE")
+                            Text("Workout Engine")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                                 .tracking(2)
@@ -98,7 +98,7 @@ struct SettingsView: View {
                         
                         // Section: Ecosystem
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("ECOSYSTEM")
+                            Text("Ecosystem Sync")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                                 .tracking(2)
@@ -178,6 +178,24 @@ struct SettingsView: View {
                                     .padding()
                                     .background(Theme.surface)
                                 }
+                                
+                                Divider().background(Theme.border.opacity(0.3))
+                                
+                                // Barbell & Plate Inventory Studio Button
+                                NavigationLink(destination: PlateInventoryStudioView(settings: settings)) {
+                                    HStack {
+                                        Image(systemName: "dumbbell.fill")
+                                            .foregroundColor(Theme.warningOrange)
+                                        Text("Barbell & Plates Studio")
+                                            .font(.headline)
+                                            .foregroundColor(Theme.textPrimary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .foregroundColor(Theme.textSecondary)
+                                    }
+                                    .padding()
+                                    .background(Theme.surface)
+                                }
                             }
                             .cornerRadius(12)
                             .padding(.horizontal)
@@ -185,7 +203,7 @@ struct SettingsView: View {
                         
                         // Section: Data Management
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("DATA MANAGEMENT")
+                            Text("Data Management")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                                 .tracking(2)
@@ -201,7 +219,7 @@ struct SettingsView: View {
                                     HStack {
                                         Image(systemName: "square.and.arrow.up")
                                             .foregroundColor(Theme.accent)
-                                        Text("EXPORT WORKOUT HISTORY (CSV)")
+                                        Text("Export Workout History (CSV)")
                                             .font(.headline)
                                             .foregroundColor(Theme.textPrimary)
                                         Spacer()

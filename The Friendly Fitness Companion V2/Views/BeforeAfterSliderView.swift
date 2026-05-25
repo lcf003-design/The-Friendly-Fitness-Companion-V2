@@ -71,7 +71,7 @@ struct BeforeAfterSliderView: View {
                     HStack {
                         // BEFORE Label
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("BEFORE")
+                            Text("Before")
                                 .font(Theme.Typography.technical(10, weight: .black))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
@@ -99,7 +99,7 @@ struct BeforeAfterSliderView: View {
                         
                         // AFTER Label
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("AFTER")
+                            Text("After")
                                 .font(Theme.Typography.technical(10, weight: .black))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
