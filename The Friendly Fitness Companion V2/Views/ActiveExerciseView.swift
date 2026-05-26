@@ -59,6 +59,10 @@ struct ActiveExerciseView: View {
         ghost?.sets.map { $0.weight }.max() ?? 0.0
     }
     
+    private var weightUnit: String {
+        userSettings.first?.weightUnit ?? "lb"
+    }
+    
     // Calculates the recommended progressive overload target
     private var overloadAdvice: (targetWeight: Double, targetReps: Int, note: String) {
         guard let settings = userSettings.first else {
@@ -101,7 +105,7 @@ struct ActiveExerciseView: View {
             return (
                 lastWeight,
                 lastReps,
-                "Last set hit failure. Solidify \(lastWeight, specifier: "%g") \(unit) for \(lastReps) reps before adding weight."
+                "Last set hit failure. Solidify \(String(format: "%g", lastWeight)) \(unit) for \(lastReps) reps before adding weight."
             )
         }
         
@@ -111,13 +115,13 @@ struct ActiveExerciseView: View {
                 return (
                     nextWeight,
                     3,
-                    "Strength target met. Load \(nextWeight, specifier: "%g") \(unit) for 3–5 reps."
+                    "Strength target met. Load \(String(format: "%g", nextWeight)) \(unit) for 3–5 reps."
                 )
             } else {
                 return (
                     lastWeight,
                     lastReps + 1,
-                    "Strength progression: Lift \(lastWeight, specifier: "%g") \(unit) for \(lastReps + 1) reps."
+                    "Strength progression: Lift \(String(format: "%g", lastWeight)) \(unit) for \(lastReps + 1) reps."
                 )
             }
         } else {
@@ -126,16 +130,44 @@ struct ActiveExerciseView: View {
                 return (
                     nextWeight,
                     8,
-                    "Hypertrophy ceiling hit. Step up to \(nextWeight, specifier: "%g") \(unit) for 8 reps."
+                    "Hypertrophy ceiling hit. Step up to \(String(format: "%g", nextWeight)) \(unit) for 8 reps."
                 )
             } else {
                 return (
                     lastWeight,
                     lastReps + 1,
-                    "Rep progression: Lift \(lastWeight, specifier: "%g") \(unit) for \(lastReps + 1) reps."
+                    "Rep progression: Lift \(String(format: "%g", lastWeight)) \(unit) for \(lastReps + 1) reps."
                 )
             }
         }
+    }
+    
+    private func calculatePlates(for weight: Double) -> [(plate: Double, count: Int)] {
+        let unit = weightUnit
+        let allPlates = unit == "kg" ? [25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25] : [45.0, 35.0, 25.0, 10.0, 5.0, 2.5]
+        
+        let activePlates: [Double]
+        if let csv = userSettings.first?.availablePlatesCSV, !csv.isEmpty {
+            let parsed = csv.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            let intersected = parsed.filter { allPlates.contains($0) }
+            activePlates = intersected.isEmpty ? allPlates : intersected
+        } else {
+            activePlates = allPlates
+        }
+        
+        let barWeight = unit == "kg" ? 20.0 : 45.0
+        var targetPerSide = (weight - barWeight) / 2.0
+        if targetPerSide <= 0 { return [] }
+        
+        var result: [(plate: Double, count: Int)] = []
+        for plate in activePlates.sorted(by: >) {
+            if targetPerSide >= plate {
+                let count = Int(targetPerSide / plate)
+                result.append((plate, count))
+                targetPerSide -= Double(count) * plate
+            }
+        }
+        return result
     }
     
     // Calculates the Estimated 1-Rep Max for the current active workout exercise using the Epley formula
@@ -250,35 +282,12 @@ struct ActiveExerciseView: View {
                     .padding(.horizontal)
                     .padding(.top, 16)
                     .sheet(isPresented: $showPlateCalculator) {
-                        let unit = weightUnit
-                        let allPlates = unit == "kg" ? [25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25] : [45.0, 35.0, 25.0, 10.0, 5.0, 2.5]
-                        let activePlates: [Double] = {
-                            if let csv = userSettings.first?.availablePlatesCSV, !csv.isEmpty {
-                                let parsed = csv.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                                let intersected = parsed.filter { allPlates.contains($0) }
-                                return intersected.isEmpty ? allPlates : intersected
-                            }
-                            return allPlates
-                        }()
-                        let barWeight = unit == "kg" ? 20.0 : 45.0
-                        let targetPerSide = max(0.0, (advice.targetWeight - barWeight) / 2.0)
-                        
-                        var recommendedPlates: [(plate: Double, count: Int)] = []
-                        var remaining = targetPerSide
-                        for plate in activePlates.sorted(by: >) {
-                            if remaining >= plate {
-                                let count = Int(remaining / plate)
-                                recommendedPlates.append((plate, count))
-                                remaining -= Double(count) * plate
-                            }
-                        }
-                        
                         BarbellPlateLoaderSheet(
                             weight: advice.targetWeight,
-                            unit: unit,
-                            plates: recommendedPlates,
-                            barbellName: userSettings.first?.barbellType ?? (unit == "kg" ? "Olympic Bar (20 kg)" : "Olympic Bar (45 lb)"),
-                            barbellWeight: barWeight
+                            unit: weightUnit,
+                            plates: calculatePlates(for: advice.targetWeight),
+                            barbellName: userSettings.first?.barbellType ?? (weightUnit == "kg" ? "Olympic Bar (20 kg)" : "Olympic Bar (45 lb)"),
+                            barbellWeight: userSettings.first?.barbellWeight ?? (weightUnit == "kg" ? 20.0 : 45.0)
                         )
                     }
                 }
