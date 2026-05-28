@@ -69,8 +69,6 @@ struct ActiveExerciseView: View {
             return (0.0, 8, "Configure settings to enable progressive overload planner.")
         }
         
-        let targetName = workoutExercise.loggedName.isEmpty ? (workoutExercise.exerciseRef?.name ?? "") : workoutExercise.loggedName
-        
         // Find matching exercises in past performances from history
         let pastExercises = history.filter { $0.id != workoutExercise.id && !$0.sets.isEmpty }
         
@@ -249,10 +247,7 @@ struct ActiveExerciseView: View {
                 
                 let advice = overloadAdvice
                 if advice.targetWeight > 0 {
-                    Button(action: {
-                        HapticManager.shared.playSelection()
-                        showPlateCalculator = true
-                    }) {
+                    VStack(spacing: 12) {
                         VStack(spacing: 6) {
                             Text("Coach's Recommendation")
                                 .font(Theme.Typography.technical(10, weight: .bold))
@@ -269,16 +264,54 @@ struct ActiveExerciseView: View {
                                 .lineLimit(2)
                                 .padding(.horizontal, 12)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
-                                .background(Theme.accent.opacity(0.08))
-                        )
+                        
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                HapticManager.shared.playSuccess()
+                                applyCoachRecommendation()
+                            }) {
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text("Apply Advice")
+                                }
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.midnightMatte)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Theme.accent)
+                                .cornerRadius(8)
+                            }
+                            
+                            Button(action: {
+                                HapticManager.shared.playSelection()
+                                showPlateCalculator = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "info.circle")
+                                    Text("Load Plates")
+                                }
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.accent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(Theme.surface)
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 12)
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+                            .background(Theme.accent.opacity(0.08))
+                    )
                     .padding(.horizontal)
                     .padding(.top, 16)
                     .sheet(isPresented: $showPlateCalculator) {
@@ -287,7 +320,10 @@ struct ActiveExerciseView: View {
                             unit: weightUnit,
                             plates: calculatePlates(for: advice.targetWeight),
                             barbellName: userSettings.first?.barbellType ?? (weightUnit == "kg" ? "Olympic Bar (20 kg)" : "Olympic Bar (45 lb)"),
-                            barbellWeight: userSettings.first?.barbellWeight ?? (weightUnit == "kg" ? 20.0 : 45.0)
+                            barbellWeight: userSettings.first?.barbellWeight ?? (weightUnit == "kg" ? 20.0 : 45.0),
+                            onApplyWeight: { appliedWeight in
+                                applyCoachRecommendation()
+                            }
                         )
                     }
                 }
@@ -544,10 +580,65 @@ struct ActiveExerciseView: View {
         }
     }
     
+    private func applyCoachRecommendation() {
+        let advice = overloadAdvice
+        guard advice.targetWeight > 0 else { return }
+        
+        if let uncompletedSet = workoutExercise.sets.first(where: { !$0.isCompleted }) {
+            uncompletedSet.weight = advice.targetWeight
+            uncompletedSet.reps = advice.targetReps
+            try? modelContext.save()
+        } else {
+            let newSet = ExerciseSet(weight: advice.targetWeight, reps: advice.targetReps)
+            modelContext.insert(newSet)
+            workoutExercise.sets.append(newSet)
+            try? modelContext.save()
+        }
+        HapticManager.shared.playSuccess()
+    }
+    
     private func addSet() {
-        let newSet = ExerciseSet(weight: 0.0, reps: 0)
+        var weight = 0.0
+        var reps = 0
+        var cardioDistance = 0.0
+        var cardioDurationSeconds = 0
+        var cardioCalories = 0
+        
+        let isCardio = workoutExercise.exerciseRef?.targetMuscle == "Cardio"
+        
+        if let lastSet = workoutExercise.sets.last {
+            if isCardio {
+                cardioDistance = lastSet.cardioDistance
+                cardioDurationSeconds = lastSet.cardioDurationSeconds
+                cardioCalories = lastSet.cardioCalories
+            } else {
+                weight = lastSet.weight
+                reps = lastSet.reps
+            }
+        } else {
+            // First set
+            if !isCardio {
+                let advice = overloadAdvice
+                if advice.targetWeight > 0 {
+                    weight = advice.targetWeight
+                    reps = advice.targetReps
+                } else {
+                    weight = 0.0
+                    reps = 8 // default reps fallback
+                }
+            }
+        }
+        
+        let newSet = ExerciseSet(
+            weight: weight,
+            reps: reps,
+            cardioDistance: cardioDistance,
+            cardioDurationSeconds: cardioDurationSeconds,
+            cardioCalories: cardioCalories
+        )
         modelContext.insert(newSet)
         workoutExercise.sets.append(newSet)
+        try? modelContext.save()
         
         HapticManager.shared.playLightImpact()
     }
@@ -571,6 +662,7 @@ struct Particle: Identifiable {
 }
 
 struct SetRowView: View {
+    @Environment(\.modelContext) private var modelContext
     let setIndex: Int
     @Bindable var exerciseSet: ExerciseSet
     let isCardio: Bool
@@ -952,7 +1044,11 @@ struct SetRowView: View {
                                                 unit: weightUnit,
                                                 plates: plates,
                                                 barbellName: userSettings.first?.barbellType ?? (weightUnit == "kg" ? "Olympic Bar (20 kg)" : "Olympic Bar (45 lb)"),
-                                                barbellWeight: userSettings.first?.barbellWeight ?? (weightUnit == "kg" ? 20.0 : 45.0)
+                                                barbellWeight: userSettings.first?.barbellWeight ?? (weightUnit == "kg" ? 20.0 : 45.0),
+                                                onApplyWeight: { appliedWeight in
+                                                    exerciseSet.weight = appliedWeight
+                                                    try? modelContext.save()
+                                                }
                                             )
                                         }
                                     }
@@ -1233,13 +1329,34 @@ struct SetRowView: View {
         .onDisappear {
             rpTimer?.invalidate()
         }
+        .onChange(of: exerciseSet.weight) {
+            weightString = exerciseSet.weight > 0 ? String(format: "%.1f", exerciseSet.weight) : ""
+        }
+        .onChange(of: exerciseSet.reps) {
+            repsString = exerciseSet.reps > 0 ? String(exerciseSet.reps) : ""
+        }
+        .onChange(of: exerciseSet.cardioDistance) {
+            distanceString = exerciseSet.cardioDistance > 0 ? String(format: "%.2f", exerciseSet.cardioDistance) : ""
+        }
+        .onChange(of: exerciseSet.cardioDurationSeconds) {
+            if exerciseSet.cardioDurationSeconds > 0 {
+                let mins = exerciseSet.cardioDurationSeconds / 60
+                let secs = exerciseSet.cardioDurationSeconds % 60
+                durationString = String(format: "%02d:%02d", mins, secs)
+            } else {
+                durationString = ""
+            }
+        }
+        .onChange(of: exerciseSet.cardioCalories) {
+            caloriesString = exerciseSet.cardioCalories > 0 ? String(exerciseSet.cardioCalories) : ""
+        }
     }
 }
 
 
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self, FastingLogEntry.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try? ModelContainer(for: schema, configurations: [config])
     

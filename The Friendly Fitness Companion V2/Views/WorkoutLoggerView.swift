@@ -11,6 +11,8 @@ struct WorkoutLoggerView: View {
     @State private var isShowingExerciseSelection = false
     @State private var isEditMode: Bool = false
     @State private var isShowingHelp: Bool = false
+    @State private var isShowingShareSheet = false
+    @State private var sharedImage: UIImage? = nil
     var isNewSession: Bool = false
     
     var body: some View {
@@ -48,7 +50,23 @@ struct WorkoutLoggerView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    trailingToolbarButton
+                    HStack(spacing: 16) {
+                        if !isEditMode {
+                            Button(action: {
+                                HapticManager.shared.playSelection()
+                                let unit = userSettings.first?.weightUnit ?? "lb"
+                                if let img = WorkoutCardExporter.shared.renderWorkoutCard(session: session, unit: unit) {
+                                    sharedImage = img
+                                    isShowingShareSheet = true
+                                }
+                            }) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .foregroundColor(Theme.accent)
+                            }
+                        }
+                        
+                        trailingToolbarButton
+                    }
                 }
                 ToolbarItem(placement: .navigationBarLeading) {
                     leadingToolbarButton
@@ -71,6 +89,11 @@ struct WorkoutLoggerView: View {
             }
             .sheet(isPresented: $isShowingHelp) {
                 WorkoutLoggerHelpView()
+            }
+            .sheet(isPresented: $isShowingShareSheet) {
+                if let img = sharedImage {
+                    ActivityView(activityItems: [img])
+                }
             }
         }
     }
@@ -270,12 +293,11 @@ struct WorkoutLoggerView: View {
                 let elapsed = Date().timeIntervalSince(activeFast.startTime)
                 let hours = elapsed / 3600.0
                 let phaseTitle = fastingPhaseTitle(for: hours)
-                
                 let defaultNames = ["Late Night Grind", "Morning Grind", "Afternoon Grind", "Workout Session", "New Grind"]
                 if defaultNames.contains(session.name) || session.name.isEmpty {
-                    session.name = "Fasted Workout"
+                    session.name = "Fasted Workout (\(phaseTitle))"
                 } else if !session.name.contains("Fasted") {
-                    session.name += " (Fasted)"
+                    session.name += " (Fasted - \(phaseTitle))"
                 }
             }
             
@@ -408,7 +430,7 @@ struct WorkoutLoggerView: View {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self, FastingLogEntry.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

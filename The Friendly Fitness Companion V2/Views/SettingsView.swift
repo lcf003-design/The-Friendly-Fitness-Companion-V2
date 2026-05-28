@@ -157,6 +157,20 @@ struct SettingsView: View {
                                     }
                                     .pickerStyle(.segmented)
                                     .frame(width: 150)
+                                    .onChange(of: settings.weightUnit) { oldValue, newValue in
+                                        if newValue == "kg" {
+                                            settings.bodyWeight = (settings.bodyWeight * 0.45359237).rounded(to: 1)
+                                            settings.barbellWeight = 20.0
+                                            settings.barbellType = "Olympic Bar (20 kg)"
+                                            settings.availablePlatesCSV = "25,20,15,10,5,2.5,1.25"
+                                        } else if newValue == "lb" {
+                                            settings.bodyWeight = (settings.bodyWeight / 0.45359237).rounded(to: 1)
+                                            settings.barbellWeight = 45.0
+                                            settings.barbellType = "Olympic Bar (45 lb)"
+                                            settings.availablePlatesCSV = "45,35,25,10,5,2.5"
+                                        }
+                                        try? modelContext.save()
+                                    }
                                 }
                                 .padding()
                                 .background(Theme.surface)
@@ -283,10 +297,18 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
+extension Double {
+    func rounded(to places: Int) -> Double {
+        let divisor = pow(10.0, Double(places))
+        return (self * divisor).rounded() / divisor
+    }
+}
+
+
 
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self, FastingLogEntry.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

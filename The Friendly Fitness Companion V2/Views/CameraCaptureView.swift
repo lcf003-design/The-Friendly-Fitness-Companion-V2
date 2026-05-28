@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import SwiftData
 import Combine
+import CoreImage
 
 struct CameraCaptureView: View {
     @Environment(\.modelContext) private var modelContext
@@ -18,6 +19,8 @@ struct CameraCaptureView: View {
     @State private var showGhost = false
     @State private var ghostOpacity: Double = 0.4
     @State private var showOutline = false
+    @State private var ghostMode = 0 // 0 = Translucent, 1 = Contour Silhouette
+    @State private var edgeProcessedImage: UIImage? = nil
     
     var body: some View {
         ZStack {
@@ -132,13 +135,22 @@ struct CameraCaptureView: View {
                     }
                     
                     // Ghost Image Overlay
-                    if showGhost, let ghost = previousPhoto, let data = ghost.imageData, let img = UIImage(data: data) {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
-                            .opacity(ghostOpacity)
-                            .allowsHitTesting(false)
-                            .aspectRatio(0.75, contentMode: .fit)
+                    if showGhost, let ghost = previousPhoto, let data = ghost.imageData {
+                        if ghostMode == 1, let contourImg = edgeProcessedImage {
+                            Image(uiImage: contourImg)
+                                .resizable()
+                                .scaledToFill()
+                                .opacity(ghostOpacity)
+                                .allowsHitTesting(false)
+                                .aspectRatio(0.75, contentMode: .fit)
+                        } else if let rawImg = UIImage(data: data) {
+                            Image(uiImage: rawImg)
+                                .resizable()
+                                .scaledToFill()
+                                .opacity(ghostOpacity)
+                                .allowsHitTesting(false)
+                                .aspectRatio(0.75, contentMode: .fit)
+                        }
                     }
                 }
                 .overlay(
@@ -148,9 +160,16 @@ struct CameraCaptureView: View {
                 .background(Color.black)
                 .clipped()
                 
-                // Opacity Slider for Ghost Overlay
+                // Opacity & Ghost Mode controls
                 if showGhost && previousPhoto != nil {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Ghost Mode", selection: $ghostMode) {
+                            Text("Translucent").tag(0)
+                            Text("Contour").tag(1)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        
                         HStack {
                             Text("Ghost Opacity")
                                 .font(Theme.Typography.technical(9, weight: .bold))
@@ -263,9 +282,42 @@ struct CameraCaptureView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             model.startSession()
+            if let ghost = previousPhoto, let data = ghost.imageData {
+                prepareEdgeSilhouette(from: data)
+            }
         }
         .onDisappear {
             model.stopSession()
+        }
+    }
+    
+    private func prepareEdgeSilhouette(from data: Data) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let image = UIImage(data: data),
+                  let ciImage = CIImage(image: image) else { return }
+            
+            // 1. CIEdges filter to detect contours
+            guard let edgesFilter = CIFilter(name: "CIEdges") else { return }
+            edgesFilter.setValue(ciImage, forKey: "inputImage")
+            edgesFilter.setValue(1.0, forKey: "inputIntensity")
+            
+            guard let edgesOutput = edgesFilter.outputImage else { return }
+            
+            // 2. CIColorMonochrome to make it glowing neon cyan
+            guard let colorFilter = CIFilter(name: "CIColorMonochrome") else { return }
+            colorFilter.setValue(edgesOutput, forKey: "inputImage")
+            colorFilter.setValue(CIColor(color: .cyan), forKey: "inputColor")
+            colorFilter.setValue(1.0, forKey: "inputIntensity")
+            
+            guard let monochromeOutput = colorFilter.outputImage else { return }
+            
+            let context = CIContext(options: nil)
+            if let cgImage = context.createCGImage(monochromeOutput, from: monochromeOutput.extent) {
+                let processed = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+                DispatchQueue.main.async {
+                    self.edgeProcessedImage = processed
+                }
+            }
         }
     }
 }

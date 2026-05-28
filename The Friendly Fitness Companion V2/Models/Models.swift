@@ -212,7 +212,28 @@ final class UserSettings {
     var barbellType: String = "Olympic Bar (45 lb)"
     var barbellWeight: Double = 45.0
     
-    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isOnboarded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0, isRecoveryOverridden: Bool = false, manualRecoveryScore: Double = 0.8, activeWorkoutSessionId: UUID? = nil, availablePlatesCSV: String = "45,35,25,10,5,2.5", userAgeYears: Int = 25, activityLevel: String = "Moderate", weeklyFastingScheduleCSV: String = "16,16,16,16,16,16,16", barbellType: String = "Olympic Bar (45 lb)", barbellWeight: Double = 45.0) {
+    // Subjective Muscle Soreness Override (e.g. "Chest:1;Back:2")
+    var muscleSorenessCSV: String = ""
+    
+    var muscleSorenessMap: [String: Int] {
+        get {
+            guard !muscleSorenessCSV.isEmpty else { return [:] }
+            var map: [String: Int] = [:]
+            let pairs = muscleSorenessCSV.split(separator: ";")
+            for pair in pairs {
+                let parts = pair.split(separator: ":")
+                if parts.count == 2, let score = Int(parts[1]) {
+                    map[String(parts[0])] = score
+                }
+            }
+            return map
+        }
+        set {
+            muscleSorenessCSV = newValue.map { "\($0.key):\($0.value)" }.joined(separator: ";")
+        }
+    }
+    
+    init(id: UUID = UUID(), userName: String = "Athlete", bodyWeight: Double = 0.0, weightUnit: String = "lb", isSeeded: Bool = false, isOnboarded: Bool = false, isRestTimerEnabled: Bool = true, isHapticMetronomeEnabled: Bool = false, tempoProfile: String = "Mentzer HIT (4-2-4)", themePreference: Int = 0, isHealthKitSyncEnabled: Bool = false, bodyFatPercentage: Double = 0.0, heightInches: Int = 0, trainingAgeYears: Int = 0, currentPhase: String = "Hypertrophy", ghostTrackingPreference: Int = 0, isRecoveryOverridden: Bool = false, manualRecoveryScore: Double = 0.8, activeWorkoutSessionId: UUID? = nil, availablePlatesCSV: String = "45,35,25,10,5,2.5", userAgeYears: Int = 25, activityLevel: String = "Moderate", weeklyFastingScheduleCSV: String = "16,16,16,16,16,16,16", barbellType: String = "Olympic Bar (45 lb)", barbellWeight: Double = 45.0, muscleSorenessCSV: String = "") {
         self.id = id
         self.userName = userName
         self.bodyWeight = bodyWeight
@@ -244,6 +265,7 @@ final class UserSettings {
         self.weeklyFastingScheduleCSV = weeklyFastingScheduleCSV
         self.barbellType = barbellType
         self.barbellWeight = barbellWeight
+        self.muscleSorenessCSV = muscleSorenessCSV
     }
 }
 
@@ -292,7 +314,10 @@ final class FastingSession {
     var hungerRating: Int? = nil
     var wellnessNotes: String? = nil
     
-    init(id: UUID = UUID(), startTime: Date = Date(), targetHours: Int = 16, isCompleted: Bool = false, endTime: Date? = nil, energyRating: Int? = nil, focusRating: Int? = nil, hungerRating: Int? = nil, wellnessNotes: String? = nil) {
+    @Relationship(deleteRule: .cascade, inverse: \FastingLogEntry.fastingSession)
+    var logEntries: [FastingLogEntry] = []
+    
+    init(id: UUID = UUID(), startTime: Date = Date(), targetHours: Int = 16, isCompleted: Bool = false, endTime: Date? = nil, energyRating: Int? = nil, focusRating: Int? = nil, hungerRating: Int? = nil, wellnessNotes: String? = nil, logEntries: [FastingLogEntry] = []) {
         self.id = id
         self.startTime = startTime
         self.targetHours = targetHours
@@ -302,6 +327,32 @@ final class FastingSession {
         self.focusRating = focusRating
         self.hungerRating = hungerRating
         self.wellnessNotes = wellnessNotes
+        self.logEntries = logEntries
+    }
+}
+
+@Model
+final class FastingLogEntry {
+    var id: UUID = UUID()
+    var timestamp: Date = Date()
+    var hoursIntoFast: Double = 0.0
+    var energyRating: Int = 3
+    var focusRating: Int = 3
+    var hungerRating: Int = 3
+    var symptomsCSV: String = ""
+    var notes: String = ""
+    
+    var fastingSession: FastingSession?
+    
+    init(id: UUID = UUID(), timestamp: Date = Date(), hoursIntoFast: Double = 0.0, energyRating: Int = 3, focusRating: Int = 3, hungerRating: Int = 3, symptomsCSV: String = "", notes: String = "") {
+        self.id = id
+        self.timestamp = timestamp
+        self.hoursIntoFast = hoursIntoFast
+        self.energyRating = energyRating
+        self.focusRating = focusRating
+        self.hungerRating = hungerRating
+        self.symptomsCSV = symptomsCSV
+        self.notes = notes
     }
 }
 

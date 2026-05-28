@@ -9,6 +9,7 @@ struct MuscleDetailView: View {
     @Query private var userSettings: [UserSettings]
     
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     
     private var unit: String {
         userSettings.first?.weightUnit.uppercased() ?? "LB"
@@ -19,6 +20,14 @@ struct MuscleDetailView: View {
     }
     
     private var recoveryPercentage: Double {
+        if let settings = userSettings.first, let soreness = settings.muscleSorenessMap[muscleName] {
+            switch soreness {
+            case 0: return 1.0
+            case 1: return 0.5
+            case 2: return 0.15
+            default: break
+            }
+        }
         guard let days = daysSinceTrained else { return 1.0 }
         if days <= 0 { return 0.1 }
         if days == 1 { return 0.3 }
@@ -28,6 +37,14 @@ struct MuscleDetailView: View {
     }
     
     private var recoveryStatus: String {
+        if let settings = userSettings.first, let soreness = settings.muscleSorenessMap[muscleName] {
+            switch soreness {
+            case 0: return "Fully Recovered (Subjective)"
+            case 1: return "Sore (Subjective)"
+            case 2: return "Extremely Sore (Subjective)"
+            default: break
+            }
+        }
         guard let days = daysSinceTrained else { return "Fully Recovered (Untrained)" }
         if days < 2 { return "Exhausted" }
         if days < 4 { return "Recovering" }
@@ -35,6 +52,14 @@ struct MuscleDetailView: View {
     }
     
     private var statusColor: Color {
+        if let settings = userSettings.first, let soreness = settings.muscleSorenessMap[muscleName] {
+            switch soreness {
+            case 0: return Theme.apexGreen
+            case 1: return Theme.warningOrange
+            case 2: return Theme.dangerRed
+            default: break
+            }
+        }
         guard let days = daysSinceTrained else { return Theme.apexGreen }
         if days < 2 { return Theme.dangerRed }
         if days < 4 { return Theme.warningOrange }
@@ -180,6 +205,41 @@ struct MuscleDetailView: View {
                                     Text("No historical sessions logged")
                                         .font(.subheadline)
                                         .foregroundColor(Theme.textSecondary)
+                                }
+                            }
+                            
+                            if let settings = userSettings.first {
+                                Divider().background(Theme.border.opacity(0.3)).padding(.vertical, 8)
+                                
+                                VStack(spacing: 8) {
+                                    Text("Subjective Soreness Override")
+                                        .font(Theme.Typography.technical(10, weight: .bold))
+                                        .foregroundColor(Theme.textSecondary)
+                                        .tracking(1)
+                                    
+                                    let currentSoreness = settings.muscleSorenessMap[muscleName] ?? -1
+                                    
+                                    Picker("Soreness Level", selection: Binding(
+                                        get: { currentSoreness },
+                                        set: { newValue in
+                                            HapticManager.shared.playSelection()
+                                            var map = settings.muscleSorenessMap
+                                            if newValue == -1 {
+                                                map.removeValue(forKey: muscleName)
+                                            } else {
+                                                map[muscleName] = newValue
+                                            }
+                                            settings.muscleSorenessMap = map
+                                            try? modelContext.save()
+                                        }
+                                    )) {
+                                        Text("Auto").tag(-1)
+                                        Text("Fresh").tag(0)
+                                        Text("Sore").tag(1)
+                                        Text("Sore+").tag(2)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .padding(.horizontal)
                                 }
                             }
                         }

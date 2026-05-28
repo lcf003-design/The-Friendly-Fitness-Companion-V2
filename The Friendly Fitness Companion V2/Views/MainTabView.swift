@@ -41,7 +41,7 @@ struct MainTabView: View {
             
             // Check for crash recovery
             if let activeId = settings.first?.activeWorkoutSessionId,
-               let restored = sessions.first(where: { $0.id == activeId }) {
+               sessions.contains(where: { $0.id == activeId }) {
                 showRestoreAlert = true
             }
         }
@@ -148,7 +148,8 @@ struct MainTabView: View {
         FastingSession.self,
         WorkoutTemplate.self,
         PhysiquePhoto.self,
-        BiometricLog.self
+        BiometricLog.self,
+        FastingLogEntry.self
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])

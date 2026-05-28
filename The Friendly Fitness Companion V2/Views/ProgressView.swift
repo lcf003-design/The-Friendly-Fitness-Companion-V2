@@ -11,6 +11,7 @@ struct ProgressView: View {
     @State private var selectedMuscle: String? = nil
     @State private var isShowingMuscleDetail = false
     @State private var isShowingBiometricLogger = false
+    @State private var isShowing1RMCalculator = false
     
     @State private var isTelemetryExpanded = true
     @State private var activeChartMetric = 0 // 0 = Tonnage, 1 = Strength Ceiling (1RM)
@@ -307,6 +308,18 @@ struct ProgressView: View {
                             .foregroundColor(Theme.textSecondary)
                     }
                 }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if selectedSegment == 2 {
+                        Button(action: {
+                            HapticManager.shared.playSelection()
+                            isShowing1RMCalculator = true
+                        }) {
+                            Image(systemName: "calculator")
+                                .foregroundColor(Theme.accent)
+                        }
+                    }
+                }
             }
             .sheet(isPresented: $isShowingHelp) {
                 ProgressHelpView()
@@ -318,6 +331,9 @@ struct ProgressView: View {
             }
             .sheet(isPresented: $isShowingBiometricLogger) {
                 QuickBiometricLoggerView()
+            }
+            .sheet(isPresented: $isShowing1RMCalculator) {
+                OneRepMaxCalculatorView()
             }
         }
     }

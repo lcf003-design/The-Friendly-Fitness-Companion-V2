@@ -156,9 +156,21 @@ struct DashboardView: View {
         let muscles = MuscleGroup.all
         let recMap = recoveryMap
         var totalPoints = 0
+        let sorenessMap = userSettings.first?.muscleSorenessMap ?? [:]
         
         for muscle in muscles {
-            if let days = recMap[muscle] {
+            if let soreness = sorenessMap[muscle] {
+                switch soreness {
+                case 0:
+                    totalPoints += 100 // Fresh
+                case 1:
+                    totalPoints += 50  // Sore
+                case 2:
+                    totalPoints += 15  // Extremely Sore (Sore+)
+                default:
+                    totalPoints += 100
+                }
+            } else if let days = recMap[muscle] {
                 if days < 2 {
                     totalPoints += 30 // Exhausted
                 } else if days < 4 {
@@ -246,7 +258,7 @@ struct DashboardView: View {
                                 HStack {
                                     Image(systemName: "clock.fill")
                                         .foregroundColor(Theme.accent)
-                                    Text("ACTIVE FASTING")
+                                    Text("Active Fasting")
                                         .font(Theme.Typography.technical(12, weight: .bold))
                                         .foregroundColor(Theme.textSecondary)
                                         .tracking(1.5)
@@ -340,7 +352,7 @@ struct DashboardView: View {
                                 HStack {
                                     Image(systemName: "clock")
                                         .foregroundColor(Theme.textSecondary)
-                                    Text("FASTING STATUS")
+                                    Text("Fasting Status")
                                         .font(Theme.Typography.technical(12, weight: .bold))
                                         .foregroundColor(Theme.textSecondary)
                                         .tracking(1.5)
@@ -414,7 +426,7 @@ struct DashboardView: View {
                         // Recovery Readiness Card
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
-                                Text("RECOVERY READINESS")
+                                Text("Recovery Readiness")
                                     .font(Theme.Typography.technical(12, weight: .bold))
                                     .foregroundColor(Theme.textSecondary)
                                     .tracking(1.5)
@@ -445,7 +457,7 @@ struct DashboardView: View {
                                 
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text("HEALTH DATA")
+                                        Text("Health Data")
                                             .font(Theme.Typography.technical(10, weight: .bold))
                                             .foregroundColor(Theme.textSecondary)
                                         
@@ -511,7 +523,7 @@ struct DashboardView: View {
                         
                         // Weekly Activity Split
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("WEEKLY ACTIVITY")
+                            Text("Weekly Activity")
                                 .font(Theme.Typography.technical(12, weight: .bold))
                                 .foregroundColor(Theme.textSecondary)
                                 .tracking(1.5)
@@ -895,7 +907,7 @@ struct StatCard: View {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self, FastingLogEntry.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

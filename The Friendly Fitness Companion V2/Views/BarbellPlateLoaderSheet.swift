@@ -7,6 +7,8 @@ struct BarbellPlateLoaderSheet: View {
     let barbellName: String
     let barbellWeight: Double
     
+    var onApplyWeight: ((Double) -> Void)? = nil
+    
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -121,6 +123,24 @@ struct BarbellPlateLoaderSheet: View {
                             }
                             .padding(.horizontal)
                         }
+                    }
+                    
+                    if let onApply = onApplyWeight {
+                        Button(action: {
+                            HapticManager.shared.playSuccess()
+                            onApply(weight)
+                            dismiss()
+                        }) {
+                            Text("Apply Weight to Set")
+                                .font(Theme.Typography.technical(16, weight: .bold))
+                                .foregroundColor(Theme.midnightMatte)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Theme.accent)
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
                     }
                     
                     Spacer()

@@ -21,7 +21,8 @@ struct The_Friendly_Fitness_Companion_V2App: App {
             WorkoutTemplate.self,
             PhysiquePhoto.self,
             BiometricLog.self,
-            WaterLog.self
+            WaterLog.self,
+            FastingLogEntry.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
 

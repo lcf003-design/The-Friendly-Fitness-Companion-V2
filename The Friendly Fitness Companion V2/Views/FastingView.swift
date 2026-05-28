@@ -45,6 +45,7 @@ struct FastingView: View {
     @Query(sort: \FastingSession.startTime, order: .reverse) private var fasts: [FastingSession]
     @Query private var settings: [UserSettings]
     @Query(sort: \WaterLog.timestamp, order: .reverse) private var waterLogs: [WaterLog]
+    @Query(sort: \WorkoutSession.timestamp, order: .reverse) private var completedSessions: [WorkoutSession]
     
     @State private var isShowingHistory: Bool = false
     @State private var selectedPhase: FastingPhase?
@@ -53,6 +54,7 @@ struct FastingView: View {
     @State private var isShowingHelp: Bool = false
     @State private var isShowingWeeklyPlanner: Bool = false
     @State private var fastToLogWellness: FastingSession? = nil
+    @State private var isShowingFastingCheckIn: Bool = false
     
     @State private var simulatorHours: Double = 0.0
     @State private var isSimulating: Bool = false
@@ -116,6 +118,12 @@ struct FastingView: View {
         let today = Date()
         let todayLogs = waterLogs.filter { calendar.isDate($0.timestamp, inSameDayAs: today) }
         return todayLogs.reduce(0.0) { $0 + $1.amountOz }
+    }
+    
+    private func formatTimeShort(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
     
     private func fastingPhaseInfoForHours(_ hours: Double) -> FastingPhase {
@@ -219,6 +227,83 @@ struct FastingView: View {
                             .frame(height: 320)
                             .padding(.top, activeFast == nil ? 10 : 40)
                         
+                        if let active = activeFast {
+                            VStack(spacing: 16) {
+                                Button(action: {
+                                    HapticManager.shared.playSelection()
+                                    isShowingFastingCheckIn = true
+                                }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "plus.circle.fill")
+                                        Text("Log Fasting Check-In")
+                                    }
+                                    .font(Theme.Typography.technical(14, weight: .bold))
+                                    .foregroundColor(Theme.textPrimary)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 12)
+                                    .background(Theme.surface)
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Theme.border, lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 3)
+                                }
+                                
+                                if !active.logEntries.isEmpty {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text("Check-In Timeline")
+                                            .font(Theme.Typography.technical(12, weight: .bold))
+                                            .foregroundColor(Theme.textSecondary)
+                                            .tracking(1.5)
+                                            .padding(.horizontal)
+                                        
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 12) {
+                                                ForEach(active.logEntries.sorted(by: { $0.timestamp < $1.timestamp })) { entry in
+                                                    VStack(alignment: .leading, spacing: 6) {
+                                                        HStack {
+                                                            Text(String(format: "Hour %.1f", entry.hoursIntoFast))
+                                                                .font(Theme.Typography.technical(10, weight: .black))
+                                                                .foregroundColor(Theme.accent)
+                                                            Spacer()
+                                                            Text(formatTimeShort(entry.timestamp))
+                                                                .font(Theme.Typography.technical(9, weight: .bold))
+                                                                .foregroundColor(Theme.textSecondary)
+                                                        }
+                                                        
+                                                        HStack(spacing: 8) {
+                                                            Label("\(entry.energyRating)", systemImage: "bolt.fill")
+                                                            Label("\(entry.focusRating)", systemImage: "brain.head.profile")
+                                                            Label("\(entry.hungerRating)", systemImage: "fork.knife")
+                                                        }
+                                                        .font(Theme.Typography.technical(9, weight: .bold))
+                                                        .foregroundColor(Theme.textPrimary)
+                                                        
+                                                        if !entry.symptomsCSV.isEmpty {
+                                                            Text(entry.symptomsCSV.replacingOccurrences(of: ",", with: " • "))
+                                                                .font(.system(size: 10, weight: .semibold))
+                                                                .foregroundColor(Theme.warningOrange)
+                                                                .lineLimit(1)
+                                                        }
+                                                    }
+                                                    .padding()
+                                                    .frame(width: 160)
+                                                    .background(Theme.surface)
+                                                    .cornerRadius(12)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 12)
+                                                            .stroke(Theme.border, lineWidth: 1)
+                                                    )
+                                                }
+                                            }
+                                            .padding(.horizontal)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
                         // Hydration Tracker
                         waterTrackerCard
                         
@@ -298,6 +383,11 @@ struct FastingView: View {
             }
             .sheet(item: $fastToLogWellness) { fast in
                 FastingWellnessSheet(fast: fast)
+            }
+            .sheet(isPresented: $isShowingFastingCheckIn) {
+                if let active = activeFast {
+                    FastingCheckInSheet(activeFast: active)
+                }
             }
         }
     }
@@ -632,7 +722,7 @@ struct FastingView: View {
                     Button(action: {
                         HapticManager.shared.playSelection()
                         isSimulating = false
-                        if let active = activeFast {
+                        if activeFast != nil {
                             simulatorHours = elapsedHours
                         } else {
                             simulatorHours = 0
@@ -1054,19 +1144,23 @@ struct V2CurrentPhaseCard: View {
 
 struct FastingTrendChartView: View {
     let fasts: [FastingSession]
+    let workouts: [WorkoutSession]
     
     @Query(sort: \WaterLog.timestamp, order: .forward) private var waterLogs: [WaterLog]
+    @Query private var settings: [UserSettings]
     @State private var trendMode: TrendMode = .duration
     
     enum TrendMode: String, CaseIterable, Identifiable {
         case duration = "Duration"
         case hydration = "Hydration"
+        case correlation = "Correlation"
         
         var id: String { rawValue }
         var displayLabel: String {
             switch self {
             case .duration: return "Fasting Duration (Last 7 Fasts)"
             case .hydration: return "Water Intake Trends (Last 7 Days)"
+            case .correlation: return "Fasting & Training Correlation"
             }
         }
     }
@@ -1108,6 +1202,56 @@ struct FastingTrendChartView: View {
         return data
     }
     
+    private var weightUnit: String {
+        settings.first?.weightUnit ?? "lb"
+    }
+    
+    private var fastedSessions: [WorkoutSession] {
+        workouts.filter { session in
+            fasts.contains { fast in
+                if let end = fast.endTime {
+                    return session.timestamp >= fast.startTime && session.timestamp <= end
+                } else if !fast.isCompleted {
+                    return session.timestamp >= fast.startTime && session.timestamp <= Date()
+                }
+                return false
+            }
+        }
+    }
+    
+    private var fedSessions: [WorkoutSession] {
+        workouts.filter { session in
+            !fasts.contains { fast in
+                if let end = fast.endTime {
+                    return session.timestamp >= fast.startTime && session.timestamp <= end
+                } else if !fast.isCompleted {
+                    return session.timestamp >= fast.startTime && session.timestamp <= Date()
+                }
+                return false
+            }
+        }
+    }
+    
+    private func avgRPE(for sessions: [WorkoutSession]) -> Double {
+        guard !sessions.isEmpty else { return 0.0 }
+        let sum = sessions.reduce(0.0) { $0 + Double($1.rpe) }
+        return (sum / Double(sessions.count) * 10).rounded() / 10
+    }
+    
+    private func avgVolume(for sessions: [WorkoutSession]) -> Double {
+        guard !sessions.isEmpty else { return 0.0 }
+        let sum = sessions.reduce(0.0) { $0 + totalVolume(for: $1) }
+        return (sum / Double(sessions.count)).rounded()
+    }
+    
+    private func totalVolume(for session: WorkoutSession) -> Double {
+        session.exercises.reduce(0.0) { sum, ex in
+            sum + ex.sets.filter { $0.isCompleted }.reduce(0.0) { setSum, set in
+                setSum + (set.weight * Double(set.reps))
+            }
+        }
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Picker("Trend Type", selection: $trendMode) {
@@ -1130,15 +1274,135 @@ struct FastingTrendChartView: View {
                 } else {
                     durationChart
                 }
-            } else {
+            } else if trendMode == .hydration {
                 if waterChartData.allSatisfy({ $0.amount == 0 }) {
                     emptyState(text: "Log water intake to view trends.")
                 } else {
                     hydrationChart
                 }
+            } else {
+                correlationView
             }
         }
         .padding(.horizontal)
+    }
+    
+    @ViewBuilder
+    private var correlationView: some View {
+        let fasted = fastedSessions
+        let fed = fedSessions
+        
+        let avgFastedRPE = avgRPE(for: fasted)
+        let avgFedRPE = avgRPE(for: fed)
+        
+        let avgFastedVol = avgVolume(for: fasted)
+        let avgFedVol = avgVolume(for: fed)
+        
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                // Fasted Training Card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "bolt.shield.fill")
+                            .foregroundColor(Theme.accent)
+                        Text("Fasted")
+                            .font(Theme.Typography.technical(12, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(fasted.count) Sessions")
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .foregroundColor(Theme.textPrimary)
+                        
+                        Text("Avg RPE: \(avgFastedRPE == 0 ? "N/A" : String(format: "%.1f", avgFastedRPE))")
+                            .font(Theme.Typography.technical(11, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                        
+                        Text("Avg Vol: \(avgFastedVol == 0 ? "N/A" : String(format: "%.0f %@", avgFastedVol, weightUnit))")
+                            .font(Theme.Typography.technical(11, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.surface)
+                .cornerRadius(16)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1))
+                
+                // Fed Training Card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "bolt.fill")
+                            .foregroundColor(Theme.warningOrange)
+                        Text("Fed State")
+                            .font(Theme.Typography.technical(12, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(fed.count) Sessions")
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .foregroundColor(Theme.textPrimary)
+                        
+                        Text("Avg RPE: \(avgFedRPE == 0 ? "N/A" : String(format: "%.1f", avgFedRPE))")
+                            .font(Theme.Typography.technical(11, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                        
+                        Text("Avg Vol: \(avgFedVol == 0 ? "N/A" : String(format: "%.0f %@", avgFedVol, weightUnit))")
+                            .font(Theme.Typography.technical(11, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.surface)
+                .cornerRadius(16)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1))
+            }
+            
+            // Coach Insight Card
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "brain.head.profile")
+                        .foregroundColor(Theme.apexGreen)
+                    Text("AI Coach Correlation Insight")
+                        .font(Theme.Typography.technical(11, weight: .black))
+                        .foregroundColor(Theme.apexGreen)
+                        .tracking(1.0)
+                }
+                
+                let coachText: String = {
+                    if fasted.isEmpty || fed.isEmpty {
+                        return "Need more logged fasted and fed training sessions to compile correlation insights. Keep journaling your sessions!"
+                    } else if avgFedVol > avgFastedVol {
+                        let diff = avgFedVol - avgFastedVol
+                        var text = "Your average training volume is \(String(format: "%.0f", diff)) \(weightUnit) higher in a fed state. "
+                        if avgFastedRPE > avgFedRPE {
+                            text += "Additionally, fasted workouts feel more fatiguing (RPE \(avgFastedRPE) vs \(avgFedRPE) fed). Recommendation: Schedule heavy strength sessions in your eating window, and light cardio/active recovery during fasts."
+                        } else {
+                            text += "Recommendation: Perform heavy compound lifts while fed, but you can continue using fasted windows for conditioning."
+                        }
+                        return text
+                    } else if avgFastedVol > avgFedVol {
+                        let diff = avgFastedVol - avgFedVol
+                        return "Intriguing! Your fasted training volume is \(String(format: "%.0f", diff)) \(weightUnit) higher than fed. You may respond exceptionally well to the epinephrine/growth hormone surge associated with fasted states. Recommendation: Keep training fasted, but watch recovery metrics closely."
+                    } else {
+                        return "Fasted vs. Fed workout performance is currently equal. Keep training consistently and adjust scheduling based on your daily energy levels."
+                    }
+                }()
+                
+                Text(coachText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Theme.textPrimary.opacity(0.9))
+                    .lineSpacing(4)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.surface)
+            .cornerRadius(16)
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.border, lineWidth: 1))
+        }
     }
     
     @ViewBuilder
@@ -1269,6 +1533,7 @@ struct FastingHistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \FastingSession.startTime, order: .reverse) private var fasts: [FastingSession]
+    @Query(sort: \WorkoutSession.timestamp, order: .reverse) private var workouts: [WorkoutSession]
     
     @State private var isShowingManualLogger = false
     @State private var editingFast: FastingSession? = nil
@@ -1349,7 +1614,7 @@ struct FastingHistoryView: View {
                             statisticsHeader
                                 .padding(.top, 20)
                             
-                            FastingTrendChartView(fasts: fasts)
+                            FastingTrendChartView(fasts: fasts, workouts: workouts)
                             
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Fasting Ledger")
@@ -1444,6 +1709,7 @@ struct FastingHistoryView: View {
 
 struct FastingHistoryCard: View {
     let fast: FastingSession
+    @State private var isExpanded = false
     
     var actualDurationHours: Double {
         let end = fast.endTime ?? fast.startTime
@@ -1455,54 +1721,147 @@ struct FastingHistoryCard: View {
     }
     
     var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(didMeetTarget ? Theme.accent.opacity(0.12) : Theme.warningOrange.opacity(0.12))
-                    .frame(width: 48, height: 48)
-                
-                Image(systemName: didMeetTarget ? "checkmark" : "xmark")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(didMeetTarget ? Theme.accent : Theme.warningOrange)
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text("Started:")
-                            .foregroundColor(Theme.textSecondary)
-                        Text(fast.startTime.formatted(date: .abbreviated, time: .shortened))
-                            .foregroundColor(Theme.textPrimary)
-                    }
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(didMeetTarget ? Theme.accent.opacity(0.12) : Theme.warningOrange.opacity(0.12))
+                        .frame(width: 48, height: 48)
                     
-                    if let endTime = fast.endTime {
+                    Image(systemName: didMeetTarget ? "checkmark" : "xmark")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(didMeetTarget ? Theme.accent : Theme.warningOrange)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 4) {
-                            Text("Broke:")
+                            Text("Started:")
                                 .foregroundColor(Theme.textSecondary)
-                            Text(endTime.formatted(date: .abbreviated, time: .shortened))
+                            Text(fast.startTime.formatted(date: .abbreviated, time: .shortened))
                                 .foregroundColor(Theme.textPrimary)
+                        }
+                        
+                        if let endTime = fast.endTime {
+                            HStack(spacing: 4) {
+                                Text("Broke:")
+                                    .foregroundColor(Theme.textSecondary)
+                                Text(endTime.formatted(date: .abbreviated, time: .shortened))
+                                    .foregroundColor(Theme.textPrimary)
+                            }
+                        }
+                    }
+                    .font(Theme.Typography.technical(11, weight: .bold))
+                    
+                    HStack(spacing: 4) {
+                        Text("Target: \(fast.targetHours)h")
+                        Text("•")
+                        Text(didMeetTarget ? "Achieved" : "Broken Early")
+                            .foregroundColor(didMeetTarget ? Theme.accent : Theme.warningOrange)
+                    }
+                    .font(Theme.Typography.technical(11))
+                    .foregroundColor(Theme.textSecondary)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    let durationStr = String(format: "%.1f", actualDurationHours)
+                    HStack(spacing: 8) {
+                        Text("\(durationStr)h")
+                            .font(.system(size: 24, weight: .black, design: .rounded))
+                            .foregroundColor(Theme.textPrimary)
+                        
+                        if !fast.logEntries.isEmpty {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         }
                     }
                 }
-                .font(Theme.Typography.technical(11, weight: .bold))
-                
-                HStack(spacing: 4) {
-                    Text("Target: \(fast.targetHours)h")
-                    Text("•")
-                    Text(didMeetTarget ? "Achieved" : "Broken Early")
-                        .foregroundColor(didMeetTarget ? Theme.accent : Theme.warningOrange)
-                }
-                .font(Theme.Typography.technical(11))
-                .foregroundColor(Theme.textSecondary)
             }
             
-            Spacer()
-            
-            VStack(alignment: .trailing, spacing: 4) {
-                let durationStr = String(format: "%.1f", actualDurationHours)
-                Text("\(durationStr)h")
-                    .font(.system(size: 24, weight: .black, design: .rounded))
-                    .foregroundColor(Theme.textPrimary)
+            if isExpanded && !fast.logEntries.isEmpty {
+                Divider()
+                    .background(Theme.border.opacity(0.3))
+                    .padding(.vertical, 12)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Bio-Feedback Timeline")
+                        .font(Theme.Typography.technical(10, weight: .black))
+                        .foregroundColor(Theme.accent)
+                        .tracking(1.5)
+                        .padding(.bottom, 4)
+                    
+                    ForEach(fast.logEntries.sorted(by: { $0.timestamp < $1.timestamp })) { entry in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(String(format: "Hour %.1f Check-In", entry.hoursIntoFast))
+                                    .font(Theme.Typography.technical(10, weight: .black))
+                                    .foregroundColor(Theme.accent)
+                                Spacer()
+                                Text(entry.timestamp.formatted(date: .omitted, time: .shortened))
+                                    .font(Theme.Typography.technical(9, weight: .bold))
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                            
+                            HStack(spacing: 12) {
+                                Label {
+                                    Text("\(entry.energyRating)")
+                                } icon: {
+                                    Image(systemName: "bolt.fill")
+                                        .foregroundColor(Theme.warningOrange)
+                                }
+                                
+                                Label {
+                                    Text("\(entry.focusRating)")
+                                } icon: {
+                                    Image(systemName: "brain.head.profile")
+                                        .foregroundColor(Theme.accent)
+                                }
+                                
+                                Label {
+                                    Text("\(entry.hungerRating)")
+                                } icon: {
+                                    Image(systemName: "fork.knife")
+                                        .foregroundColor(Theme.apexGreen)
+                                }
+                            }
+                            .font(Theme.Typography.technical(10, weight: .bold))
+                            .foregroundColor(Theme.textPrimary)
+                            
+                            if !entry.symptomsCSV.isEmpty {
+                                HStack(alignment: .top, spacing: 4) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(Theme.warningOrange)
+                                        .padding(.top, 1.5)
+                                    Text("Symptoms: " + entry.symptomsCSV.replacingOccurrences(of: ",", with: ", "))
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(Theme.warningOrange)
+                                }
+                            }
+                            
+                            if !entry.notes.isEmpty {
+                                Text(entry.notes)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Theme.textPrimary)
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Theme.midnightMatte.opacity(0.4))
+                                    .cornerRadius(8)
+                            }
+                        }
+                        .padding(10)
+                        .background(Theme.midnightMatte.opacity(0.2))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Theme.border.opacity(0.4), lineWidth: 1)
+                        )
+                    }
+                }
             }
         }
         .padding()
@@ -1512,6 +1871,15 @@ struct FastingHistoryCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Theme.border, lineWidth: 1)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !fast.logEntries.isEmpty {
+                HapticManager.shared.playSelection()
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
+                }
+            }
+        }
     }
 }
 
@@ -2303,6 +2671,151 @@ struct StarRatingPicker: View {
                             .foregroundColor(num <= rating ? activeColor : Theme.textSecondary.opacity(0.4))
                     }
                     .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+struct FastingCheckInSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    
+    let activeFast: FastingSession
+    
+    @State private var energyRating: Int = 3
+    @State private var focusRating: Int = 3
+    @State private var hungerRating: Int = 3
+    @State private var selectedSymptoms: Set<String> = []
+    @State private var notes: String = ""
+    
+    let symptomsOptions = ["Headache", "Fatigue", "Mental Clarity", "Hunger Pangs", "High Energy", "Irritability", "Cold Sensations", "Muscle Soreness"]
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.midnightMatte.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        VStack(spacing: 4) {
+                            Text("Log Fasting Check-In")
+                                .font(Theme.Typography.technical(18, weight: .black))
+                                .foregroundColor(Theme.textPrimary)
+                            
+                            let elapsed = Date().timeIntervalSince(activeFast.startTime) / 3600.0
+                            Text(String(format: "Hour %.1f of %d Hour Fast", elapsed, activeFast.targetHours))
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.accent)
+                        }
+                        .padding(.top)
+                        
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Bio-Feedback Ratings")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .tracking(1.5)
+                            
+                            VStack(spacing: 12) {
+                                StarRatingPicker(label: "Energy Level", rating: $energyRating, activeColor: Theme.warningOrange)
+                                Divider().background(Theme.border.opacity(0.3))
+                                StarRatingPicker(label: "Mental Focus", rating: $focusRating, activeColor: Theme.accent)
+                                Divider().background(Theme.border.opacity(0.3))
+                                StarRatingPicker(label: "Hunger Control", rating: $hungerRating, activeColor: Theme.apexGreen)
+                            }
+                            .padding()
+                            .background(Theme.surface)
+                            .cornerRadius(12)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
+                        }
+                        .padding(.horizontal)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Symptoms & States")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .tracking(1.5)
+                            
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 10) {
+                                ForEach(symptomsOptions, id: \.self) { symptom in
+                                    let isSelected = selectedSymptoms.contains(symptom)
+                                    Button(action: {
+                                        HapticManager.shared.playSelection()
+                                        if isSelected {
+                                            selectedSymptoms.remove(symptom)
+                                        } else {
+                                            selectedSymptoms.insert(symptom)
+                                        }
+                                    }) {
+                                        Text(symptom)
+                                            .font(Theme.Typography.technical(11, weight: .bold))
+                                            .foregroundColor(isSelected ? .white : Theme.textSecondary)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                            .background(isSelected ? Theme.accent : Theme.surface)
+                                            .cornerRadius(10)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(isSelected ? Color.clear : Theme.border, lineWidth: 1)
+                                            )
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Journal Notes")
+                                .font(Theme.Typography.technical(12, weight: .bold))
+                                .foregroundColor(Theme.textSecondary)
+                                .tracking(1.5)
+                            
+                            TextEditor(text: $notes)
+                                .font(.body)
+                                .foregroundColor(Theme.textPrimary)
+                                .scrollContentBackground(.hidden)
+                                .padding(12)
+                                .frame(minHeight: 100)
+                                .background(Theme.surface)
+                                .cornerRadius(12)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.bottom, 30)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(Theme.textSecondary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        HapticManager.shared.playSuccess()
+                        let elapsed = Date().timeIntervalSince(activeFast.startTime) / 3600.0
+                        let entry = FastingLogEntry(
+                            timestamp: Date(),
+                            hoursIntoFast: elapsed,
+                            energyRating: energyRating,
+                            focusRating: focusRating,
+                            hungerRating: hungerRating,
+                            symptomsCSV: selectedSymptoms.sorted().joined(separator: ","),
+                            notes: notes
+                        )
+                        entry.fastingSession = activeFast
+                        modelContext.insert(entry)
+                        activeFast.logEntries.append(entry)
+                        try? modelContext.save()
+                        dismiss()
+                    }
+                    .foregroundColor(Theme.accent)
                 }
             }
         }

@@ -267,9 +267,12 @@ struct GlowingNode: View {
     let size: CGFloat
     var onNodeTap: ((String) -> Void)?
     
+    @Query private var userSettings: [UserSettings]
+    
     var body: some View {
         let value = state[muscleName]
-        let color = colorForState(value: value)
+        let soreness = userSettings.first?.muscleSorenessMap[muscleName]
+        let color = colorForState(value: value, soreness: soreness)
         
         Circle()
             .fill(color)
@@ -284,22 +287,27 @@ struct GlowingNode: View {
             }
     }
     
-    private func colorForState(value: Int?) -> Color {
-        guard let val = value else {
-            switch mode {
-            case .recovery:
-                return Theme.apexGreen // Fresh
-            case .activation:
-                return Theme.border.opacity(0.5) // Untrained / inactive
-            }
-        }
-        
+    private func colorForState(value: Int?, soreness: Int?) -> Color {
         switch mode {
         case .recovery:
+            if let soreness = soreness {
+                switch soreness {
+                case 0: return Theme.apexGreen
+                case 1: return Theme.warningOrange
+                case 2: return Theme.dangerRed
+                default: break
+                }
+            }
+            guard let val = value else {
+                return Theme.apexGreen // Fresh
+            }
             if val < 2 { return Theme.dangerRed } // Exhausted
             if val < 4 { return Theme.warningOrange } // Recovering
             return Theme.apexGreen // Fully Recovered
         case .activation:
+            guard let val = value else {
+                return Theme.border.opacity(0.5) // Untrained / inactive
+            }
             if val < 4 { return Theme.border.opacity(0.5) }
             if val < 10 { return Theme.warningOrange }
             return Theme.apexGreen

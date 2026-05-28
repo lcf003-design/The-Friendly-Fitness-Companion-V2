@@ -7,16 +7,22 @@ struct ExerciseSelectionView: View {
     @Query(sort: \Exercise.name) private var allExercises: [Exercise]
     
     @State private var searchText = ""
+    @State private var selectedMuscleFilter = "All"
     @State private var isShowingAddSheet = false
     @State private var isShowingHelp = false
     
     var onSelect: (Exercise) -> Void
     
     var filteredExercises: [Exercise] {
-        if searchText.isEmpty {
-            return allExercises
-        } else {
-            return allExercises.filter { $0.name.localizedCaseInsensitiveContains(searchText) || $0.targetMuscle.localizedCaseInsensitiveContains(searchText) }
+        allExercises.filter { exercise in
+            let matchesSearch = searchText.isEmpty ||
+                exercise.name.localizedCaseInsensitiveContains(searchText) ||
+                exercise.targetMuscle.localizedCaseInsensitiveContains(searchText)
+            
+            let matchesMuscle = selectedMuscleFilter == "All" ||
+                exercise.targetMuscle.lowercased() == selectedMuscleFilter.lowercased()
+                
+            return matchesSearch && matchesMuscle
         }
     }
     
@@ -30,7 +36,7 @@ struct ExerciseSelectionView: View {
             ZStack {
                 Theme.midnightMatte.ignoresSafeArea()
                 
-                VStack {
+                    VStack {
                     // Search Bar
                     HStack {
                         Image(systemName: "magnifyingglass")
@@ -41,7 +47,34 @@ struct ExerciseSelectionView: View {
                     .padding()
                     .background(Theme.surface)
                     .cornerRadius(12)
-                    .padding()
+                    .padding([.horizontal, .top])
+                    
+                    // Muscle Filters Horizontal Row
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(["All"] + MuscleGroup.all, id: \.self) { muscle in
+                                let isSelected = selectedMuscleFilter == muscle
+                                Button(action: {
+                                    HapticManager.shared.playSelection()
+                                    selectedMuscleFilter = muscle
+                                }) {
+                                    Text(muscle)
+                                        .font(Theme.Typography.technical(12, weight: .bold))
+                                        .foregroundColor(isSelected ? .black : Theme.textPrimary)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(isSelected ? Theme.accent : Theme.surface)
+                                        .cornerRadius(20)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 20)
+                                                .stroke(Theme.border.opacity(isSelected ? 0 : 0.5), lineWidth: 1)
+                                        )
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                    }
                     
                     List {
                         ForEach(groupedExercises.keys.sorted(), id: \.self) { muscle in
@@ -120,7 +153,7 @@ struct ExerciseSelectionView: View {
 }
 
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self, FastingLogEntry.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     

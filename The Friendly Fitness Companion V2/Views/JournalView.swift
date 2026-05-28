@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import CoreImage.CIFilterBuiltins
+import AVFoundation
 
 struct CSVFile: Transferable {
     let text: String
@@ -24,6 +26,7 @@ struct JournalView: View {
     @State private var isShowingTemplateBuilder = false
     @State private var isShowingHelp = false
     @State private var isShowingImportSheet = false
+    @State private var sharingRoutineQR: WorkoutTemplate? = nil
     
     enum FilterType: String, CaseIterable {
         case all = "All"
@@ -163,6 +166,12 @@ struct JournalView: View {
                                     }
                                     .contextMenu {
                                         Button(action: {
+                                            sharingRoutineQR = template
+                                        }) {
+                                            Label("Share QR Code", systemImage: "qrcode")
+                                        }
+                                        
+                                        Button(action: {
                                             let code = encodeRoutine(template)
                                             UIPasteboard.general.string = code
                                             HapticManager.shared.playSuccess()
@@ -295,6 +304,9 @@ struct JournalView: View {
             .sheet(isPresented: $isShowingImportSheet) {
                 ImportRoutineSheet()
             }
+            .sheet(item: $sharingRoutineQR) { template in
+                ShareRoutineQRSheet(template: template)
+            }
         }
     }
     
@@ -340,6 +352,7 @@ struct ImportRoutineSheet: View {
     
     @State private var shareCode: String = ""
     @State private var errorMessage: String? = nil
+    @State private var isShowingScanner = false
     
     var body: some View {
         NavigationStack {
@@ -348,16 +361,45 @@ struct ImportRoutineSheet: View {
                 
                 VStack(spacing: 20) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Paste Routine Code")
+                        Text("Scan or Paste Routine Code")
                             .font(Theme.Typography.technical(12, weight: .bold))
                             .foregroundColor(Theme.warningOrange)
                             .tracking(1.5)
                         
-                        Text("Enter a valid Friendly Fitness Companion routine code to import it into your arsenal.")
+                        Text("Scan a routine QR code or enter a valid Friendly Fitness Companion routine code to import it into your arsenal.")
                             .font(.caption)
                             .foregroundColor(Theme.textSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    
+                    Button(action: {
+                        isShowingScanner = true
+                    }) {
+                        HStack {
+                            Image(systemName: "qrcode.viewfinder")
+                            Text("Scan Routine QR Code")
+                        }
+                        .font(Theme.Typography.technical(14, weight: .black))
+                        .foregroundColor(.black)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Theme.accent)
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal)
+                    
+                    HStack {
+                        Rectangle()
+                            .fill(Theme.border.opacity(0.3))
+                            .frame(height: 1)
+                        Text("OR")
+                            .font(Theme.Typography.technical(10, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                        Rectangle()
+                            .fill(Theme.border.opacity(0.3))
+                            .frame(height: 1)
+                    }
                     .padding(.horizontal)
                     
                     TextField("FFC-ROUTINE:RoutineName|Exercise1,Muscle;...", text: $shareCode, axis: .vertical)
@@ -407,6 +449,28 @@ struct ImportRoutineSheet: View {
                         dismiss()
                     }
                     .foregroundColor(Theme.textSecondary)
+                }
+            }
+            .sheet(isPresented: $isShowingScanner) {
+                NavigationStack {
+                    QRScannerView(onScan: { decodedString in
+                        shareCode = decodedString
+                        isShowingScanner = false
+                        importRoutine()
+                    }, onFailure: { error in
+                        errorMessage = "Camera Error: \(error.localizedDescription)"
+                        isShowingScanner = false
+                    })
+                    .navigationTitle("Scan Routine QR")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Cancel") {
+                                isShowingScanner = false
+                            }
+                            .foregroundColor(Theme.textSecondary)
+                        }
+                    }
                 }
             }
         }
@@ -608,8 +672,239 @@ struct SessionReportView: View {
     }
 }
 
+struct ShareRoutineQRSheet: View {
+    let template: WorkoutTemplate
+    @Environment(\.dismiss) private var dismiss
+    
+    private var qrCodeString: String {
+        let cleanName = template.name.replacingOccurrences(of: "|", with: "").replacingOccurrences(of: ";", with: "").replacingOccurrences(of: ",", with: "")
+        var exercisesPart = ""
+        for ex in template.targetExercises {
+            let cleanExName = ex.name.replacingOccurrences(of: "|", with: "").replacingOccurrences(of: ";", with: "").replacingOccurrences(of: ",", with: "")
+            let cleanMuscle = ex.targetMuscle.replacingOccurrences(of: "|", with: "").replacingOccurrences(of: ";", with: "").replacingOccurrences(of: ",", with: "")
+            if !exercisesPart.isEmpty {
+                exercisesPart += ";"
+            }
+            exercisesPart += "\(cleanExName),\(cleanMuscle)"
+        }
+        return "FFC-ROUTINE:\(cleanName)|\(exercisesPart)"
+    }
+    
+    private func generateQRCode(from string: String) -> UIImage? {
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(string.utf8)
+        
+        if let outputImage = filter.outputImage {
+            let transform = CGAffineTransform(scaleX: 10, y: 10)
+            let scaledImage = outputImage.transformed(by: transform)
+            if let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) {
+                return UIImage(cgImage: cgImage)
+            }
+        }
+        return nil
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.midnightMatte.ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    Text(template.name)
+                        .font(Theme.Typography.technical(20, weight: .black))
+                        .foregroundColor(Theme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    if let qrImage = generateQRCode(from: qrCodeString) {
+                        Image(uiImage: qrImage)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 250, height: 250)
+                            .padding(16)
+                            .background(Color.white)
+                            .cornerRadius(16)
+                            .shadow(color: .black.opacity(0.3), radius: 10)
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.largeTitle)
+                                .foregroundColor(Theme.dangerRed)
+                            Text("Failed to generate QR Code")
+                                .foregroundColor(Theme.textSecondary)
+                        }
+                        .frame(width: 250, height: 250)
+                        .background(Theme.surface)
+                        .cornerRadius(16)
+                    }
+                    
+                    Text("Have your friend scan this QR Code from their Import Routine screen to copy this workout instantly.")
+                        .font(.subheadline)
+                        .foregroundColor(Theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    
+                    Spacer()
+                }
+                .padding(.top, 30)
+            }
+            .navigationTitle("Share Routine")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Theme.midnightMatte, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                    .foregroundColor(Theme.textSecondary)
+                }
+            }
+        }
+    }
+}
+
+#if !targetEnvironment(simulator)
+struct QRScannerView: UIViewControllerRepresentable {
+    var onScan: (String) -> Void
+    var onFailure: (Error) -> Void
+    
+    func makeUIViewController(context: Context) -> QRScannerViewController {
+        let controller = QRScannerViewController()
+        controller.delegate = context.coordinator
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: QRScannerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onScan: onScan, onFailure: onFailure)
+    }
+    
+    class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
+        var onScan: (String) -> Void
+        var onFailure: (Error) -> Void
+        
+        init(onScan: @escaping (String) -> Void, onFailure: @escaping (Error) -> Void) {
+            self.onScan = onScan
+            self.onFailure = onFailure
+        }
+        
+        func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+            if let metadataObject = metadataObjects.first {
+                guard let readableObject = metadataObject as? AVMetadataMachineReadableCodeObject else { return }
+                guard let stringValue = readableObject.stringValue else { return }
+                AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
+                onScan(stringValue)
+            }
+        }
+    }
+}
+
+class QRScannerViewController: UIViewController {
+    var captureSession: AVCaptureSession!
+    var previewLayer: AVCaptureVideoPreviewLayer!
+    weak var delegate: AVCaptureMetadataOutputObjectsDelegate?
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor.black
+        captureSession = AVCaptureSession()
+        
+        guard let videoCaptureDevice = AVCaptureDevice.default(for: .video) else { return }
+        let videoInput: AVCaptureDeviceInput
+        
+        do {
+            videoInput = try AVCaptureDeviceInput(device: videoCaptureDevice)
+        } catch {
+            return
+        }
+        
+        if (captureSession.canAddInput(videoInput)) {
+            captureSession.addInput(videoInput)
+        } else {
+            return
+        }
+        
+        let metadataOutput = AVCaptureMetadataOutput()
+        
+        if (captureSession.canAddOutput(metadataOutput)) {
+            captureSession.addOutput(metadataOutput)
+            
+            metadataOutput.setMetadataObjectsDelegate(delegate, queue: DispatchQueue.main)
+            metadataOutput.metadataObjectTypes = [.qr]
+        } else {
+            return
+        }
+        
+        previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
+        previewLayer.frame = view.layer.bounds
+        previewLayer.videoGravity = .resizeAspectFill
+        view.layer.addSublayer(previewLayer)
+        
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            self?.captureSession.startRunning()
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if (captureSession?.isRunning == false) {
+            DispatchQueue.global(qos: .background).async { [weak self] in
+                self?.captureSession.startRunning()
+            }
+        }
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if (captureSession?.isRunning == true) {
+            captureSession.stopRunning()
+        }
+    }
+    
+    override var prefersStatusBarHidden: Bool {
+        return true
+    }
+    
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        return .portrait
+    }
+}
+#else
+struct QRScannerView: View {
+    var onScan: (String) -> Void
+    var onFailure: (Error) -> Void
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "camera.metering.unknown")
+                .font(.system(size: 50))
+                .foregroundColor(Theme.textSecondary)
+            
+            Text("Camera unavailable in iOS Simulator")
+                .font(Theme.Typography.technical(14, weight: .bold))
+                .foregroundColor(Theme.textSecondary)
+            
+            Button("Simulate Scan (Chest & Back Routine)") {
+                onScan("FFC-ROUTINE:Chest & Back Day|Bench Press,Chest;Bent Over Row,Back")
+            }
+            .padding()
+            .background(Theme.accent)
+            .foregroundColor(.black)
+            .cornerRadius(12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.surface)
+    }
+}
+#endif
+
 #Preview {
-    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self])
+    let schema = Schema([Exercise.self, WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, UserSettings.self, FastingSession.self, WorkoutTemplate.self, FastingLogEntry.self])
     let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
     let container = try! ModelContainer(for: schema, configurations: [config])
     
